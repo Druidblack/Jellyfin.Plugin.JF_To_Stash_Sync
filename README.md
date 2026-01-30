@@ -17,4 +17,5 @@ https://raw.githubusercontent.com/Druidblack/Jellyfin.Plugin.JF_To_Stash_Sync/ma
 
 
 Every video view in jellyfin will send data here:
+
 ![info](https://github.com/Druidblack/Jellyfin.Plugin.JF_To_Stash_Sync/blob/main/images/info.jpg)
