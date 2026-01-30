@@ -6,7 +6,7 @@
         "description": "Sends Jellyfin playback activity to Stash via GraphQL: play count increments and watched time per session, even for unfinished plays.",
         "owner": "Druidblack",
         "category": "General",
-        "imageUrl": "https://github.com/Druidblack/Jellyfin.Plugin.JF_To_Stash_Sync/tree/main/images/logo.jpg",
+        "imageUrl": "https://raw.githubusercontent.com/Druidblack/Jellyfin.Plugin.JF_To_Stash_Sync/main/images/logo.jpg",
         "versions": [
             {
                 "version": "1.0.0.1",
