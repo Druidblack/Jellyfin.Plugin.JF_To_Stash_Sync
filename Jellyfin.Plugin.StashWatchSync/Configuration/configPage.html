@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>JF To Stash Sync</title>
+</head>
+<body>
+    <div id="ConfigurationPage" data-role="page" class="page type-interactive pluginConfigurationPage">
+        <div data-role="content">
+            <div class="content-primary">
+                <form id="stashWatchSyncConfigForm">
+                    <div class="verticalSection">
+                        <div class="sectionTitleContainer flex align-items-center">
+                            <h2 class="sectionTitle">JF To Stash Sync</h2>
+                        </div>
+
+                        <div class="checkboxContainer checkboxContainer-withDescription">
+                            <label class="emby-checkbox-label">
+                                <input id="Enabled" type="checkbox" is="emby-checkbox" />
+                                <span>Enable plugin</span>
+                            </label>
+                            <div class="fieldDescription">Turns syncing on/off.</div>
+                        </div>
+
+                        <div class="inputContainer">
+                            <label class="inputLabel inputLabelUnfocused" for="StashEndpoint">Stash endpoint</label>
+                            <input id="StashEndpoint" name="StashEndpoint" type="text" is="emby-input" placeholder="http://192.168.1.201:9999" />
+                            <div class="fieldDescription">Base URL of Stash (e.g. http://host:9999).</div>
+                        </div>
+
+                        <div class="inputContainer">
+                            <label class="inputLabel inputLabelUnfocused" for="StashApiKey">Stash API key</label>
+                            <input id="StashApiKey" name="StashApiKey" type="password" is="emby-input" />
+                            <div class="fieldDescription">Optional. Stash Settings → Security → API Keys.</div>
+                        </div>
+
+                        <h3 class="sectionTitle">What to sync</h3>
+
+                        <div class="checkboxContainer checkboxContainer-withDescription">
+                            <label class="emby-checkbox-label">
+                                <input id="SyncPlayDuration" type="checkbox" is="emby-checkbox" />
+                                <span>Play duration</span>
+                            </label>
+                            <div class="fieldDescription">Adds the <em>real watched time</em> (estimated from playback progress) to Stash — for both finished and unfinished sessions.</div>
+                        </div>
+                        <h3 class="sectionTitle">Matching scenes</h3>
+
+                        <div class="checkboxContainer checkboxContainer-withDescription">
+                            <label class="emby-checkbox-label">
+                                <input id="EnablePathFallback" type="checkbox" is="emby-checkbox" />
+                                <span>Fallback to file path search</span>
+                            </label>
+                            <div class="fieldDescription">If the item has no provider id &quot;Stash&quot;, try to find a Stash Scene by file path.</div>
+                        </div>
+
+                        <div class="checkboxContainer checkboxContainer-withDescription">
+                            <label class="emby-checkbox-label">
+                                <input id="SearchByFullPath" type="checkbox" is="emby-checkbox" />
+                                <span>Search by full path</span>
+                            </label>
+                            <div class="fieldDescription">If off, only the filename is used when searching in Stash.</div>
+                        </div>
+
+                        <div class="inputContainer">
+                            <label class="inputLabel inputLabelUnfocused" for="JellyfinPathPrefix">Jellyfin path prefix</label>
+                            <input id="JellyfinPathPrefix" name="JellyfinPathPrefix" type="text" is="emby-input" placeholder="/mnt/media" />
+                            <div class="fieldDescription">Optional. If your Jellyfin and Stash use different mount points, set a prefix mapping.</div>
+                        </div>
+
+                        <div class="inputContainer">
+                            <label class="inputLabel inputLabelUnfocused" for="StashPathPrefix">Stash path prefix</label>
+                            <input id="StashPathPrefix" name="StashPathPrefix" type="text" is="emby-input" placeholder="/data" />
+                        </div>
+
+                        <h3 class="sectionTitle">Users</h3>
+
+                        <div class="inputContainer">
+                            <label class="inputLabel inputLabelUnfocused" for="OnlyUserIdsCsv">Only sync these Jellyfin User IDs</label>
+                            <input id="OnlyUserIdsCsv" name="OnlyUserIdsCsv" type="text" is="emby-input" placeholder="(leave empty to sync all users)" />
+                            <div class="fieldDescription">Comma-separated list. Empty = all users.</div>
+                        </div>
+
+                        <button is="emby-button" type="submit" class="raised button-submit block emby-button">
+                            <span>Save</span>
+                        </button>
+
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <script type="text/javascript">
+            var pluginConfig = {
+                pluginUniqueId: '61db1999-72b9-4f58-ac15-25aedcabd583'
+            };
+
+            $('#ConfigurationPage').on('pageshow', function () {
+                Dashboard.showLoadingMsg();
+                ApiClient.getPluginConfiguration(pluginConfig.pluginUniqueId).then(function (config) {
+                    $('#Enabled').prop('checked', config.Enabled);
+                    $('#StashEndpoint').val(config.StashEndpoint).change();
+                    $('#StashApiKey').val(config.StashApiKey).change();
+                    $('#SyncPlayDuration').prop('checked', config.SyncPlayDuration);
+
+                    $('#EnablePathFallback').prop('checked', config.EnablePathFallback);
+                    $('#SearchByFullPath').prop('checked', config.SearchByFullPath);
+                    $('#JellyfinPathPrefix').val(config.JellyfinPathPrefix).change();
+                    $('#StashPathPrefix').val(config.StashPathPrefix).change();
+
+                    $('#OnlyUserIdsCsv').val(config.OnlyUserIdsCsv).change();
+
+                    Dashboard.hideLoadingMsg();
+                });
+            });
+
+            $('#ConfigurationPage').on('submit', function () {
+                Dashboard.showLoadingMsg();
+                ApiClient.getPluginConfiguration(pluginConfig.pluginUniqueId).then(function (config) {
+                    config.Enabled = $('#Enabled').prop('checked');
+                    config.StashEndpoint = $('#StashEndpoint').val();
+                    config.StashApiKey = $('#StashApiKey').val();
+                    config.SyncPlayDuration = $('#SyncPlayDuration').prop('checked');
+
+                    config.EnablePathFallback = $('#EnablePathFallback').prop('checked');
+                    config.SearchByFullPath = $('#SearchByFullPath').prop('checked');
+                    config.JellyfinPathPrefix = $('#JellyfinPathPrefix').val();
+                    config.StashPathPrefix = $('#StashPathPrefix').val();
+
+                    config.OnlyUserIdsCsv = $('#OnlyUserIdsCsv').val();
+
+                    ApiClient.updatePluginConfiguration(pluginConfig.pluginUniqueId, config).then(function (result) {
+                        Dashboard.processPluginConfigurationUpdateResult(result);
+                    });
+                });
+                return false;
+            });
+        </script>
+
+    </div>
+</body>
+</html>
