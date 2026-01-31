@@ -31,6 +31,21 @@ public sealed class PluginConfiguration : BasePluginConfiguration
 
 
 
+/// <summary>
+/// Sync Jellyfin actor favorites to Stash performer favorites.
+/// When enabled, toggling the 'heart' on a Person/Actor item in Jellyfin will set the same favorite state
+/// on the corresponding Stash performer (only when the Jellyfin person has a Stash provider id).
+/// </summary>
+public bool SyncPerformerFavorites { get; set; } = false;
+
+    /// <summary>
+    /// When you favorite/unfavorite a video in Jellyfin, set the matching scene rating in Stash (favorite=5, unfavorite=0).
+    /// Scene matching uses the Stash provider id when available; otherwise the file-path fallback is used when enabled.
+    /// </summary>
+    public bool SyncFavoriteToRating { get; set; } = false;
+
+
+
     /// <summary>
     /// Flush in-progress watched-time to Stash even when the item is not marked Played in Jellyfin.
     /// This helps keep Stash play_duration up to date for unfinished playback sessions.

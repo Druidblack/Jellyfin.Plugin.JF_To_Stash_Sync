@@ -111,6 +111,8 @@ private async Task HandlePlaybackProgressAsync(PlaybackProgressEventArgs e, bool
 {
     try
     {
+        var nowUtc = DateTime.UtcNow;
+
         var cfg = Plugin.Instance?.Configuration;
         if (cfg is null || !cfg.Enabled)
         {
@@ -158,7 +160,6 @@ private async Task HandlePlaybackProgressAsync(PlaybackProgressEventArgs e, bool
         state.ItemPath = item.Path ?? state.ItemPath;
         state.ItemName = item.Name ?? state.ItemName;
 
-        var nowUtc = DateTime.UtcNow;
         state.LastActivityUtc = nowUtc;
 
         var posTicks = e.PlaybackPositionTicks ?? 0L;
@@ -189,6 +190,8 @@ private async Task HandlePlaybackStoppedAsync(PlaybackStopEventArgs e)
 {
     try
     {
+        var nowUtc = DateTime.UtcNow;
+
         var cfg = Plugin.Instance?.Configuration;
         if (cfg is null || !cfg.Enabled)
         {
@@ -237,7 +240,6 @@ private async Task HandlePlaybackStoppedAsync(PlaybackStopEventArgs e)
         state.ItemPath = item.Path ?? state.ItemPath;
         state.ItemName = item.Name ?? state.ItemName;
 
-        var nowUtc = DateTime.UtcNow;
         state.LastActivityUtc = nowUtc;
 
         var posTicks = e.PlaybackPositionTicks ?? 0L;
@@ -367,6 +369,21 @@ private static object? GetPropertyValue(object obj, string name)
     {
         return null;
     }
+}
+
+private static bool? TryGetBoolProperty(object obj, params string[] names)
+{
+    foreach (var name in names)
+    {
+        var v = GetPropertyValue(obj, name);
+        // Nullable<bool> values are boxed either as 'bool' (when HasValue)
+        // or as 'null' (when !HasValue). So we only need to handle 'bool'.
+        if (v is bool b)
+        {
+            return b;
+        }
+    }
+    return null;
 }
 
     private async Task FlushLoopAsync(CancellationToken ct)
@@ -524,6 +541,70 @@ private static object? GetPropertyValue(object obj, string name)
             return;
         }
 
+        var ud = e.UserData;
+        if (ud is null)
+        {
+            return;
+        }
+
+        var nowUtc = DateTime.UtcNow;
+
+        // 0) Person favorites -> Stash performer favorites.
+        if (cfg.SyncPerformerFavorites && e.Item is Person person)
+        {
+            if (person.ProviderIds is null
+                || !person.ProviderIds.TryGetValue("Stash", out var stashPerformerId)
+                || string.IsNullOrWhiteSpace(stashPerformerId))
+            {
+                // To avoid accidental matches, we only sync when a Stash provider id exists on the Jellyfin person.
+                return;
+            }
+
+            string favKey = userId.ToString("N", CultureInfo.InvariantCulture) + ":" + person.Id.ToString("N", CultureInfo.InvariantCulture);
+            var favState = _state.GetOrAdd(favKey, _ => new SyncState());
+
+            var isFavorite = ud.IsFavorite;
+
+            // Only act on changes.
+            if (favState.LastIsFavorite.HasValue && favState.LastIsFavorite.Value == isFavorite)
+            {
+                return;
+            }
+
+            // Guard against multiple quick saves producing duplicate Stash calls.
+            if (favState.LastFavoriteSentUtc != DateTime.MinValue && (nowUtc - favState.LastFavoriteSentUtc).TotalSeconds < 2)
+            {
+                favState.LastIsFavorite = isFavorite;
+                return;
+            }
+
+            var ok = await _stashClient.SetPerformerFavoriteAsync(stashPerformerId, isFavorite, CancellationToken.None).ConfigureAwait(false);
+            if (ok)
+            {
+                _logger.LogInformation(
+                    "StashWatchSync: synced performer favorite to Stash. performerId={PerformerId} favorite={Favorite} userId={UserId} itemId={ItemId} name={Name}",
+                    stashPerformerId,
+                    isFavorite,
+                    userId,
+                    person.Id,
+                    person.Name ?? string.Empty);
+            }
+            else
+            {
+                _logger.LogWarning(
+                    "StashWatchSync: failed to sync performer favorite to Stash. performerId={PerformerId} favorite={Favorite} userId={UserId} itemId={ItemId} name={Name}",
+                    stashPerformerId,
+                    isFavorite,
+                    userId,
+                    person.Id,
+                    person.Name ?? string.Empty);
+            }
+
+            favState.LastIsFavorite = isFavorite;
+            favState.LastFavoriteSentUtc = nowUtc;
+            return;
+        }
+
         // We only care about videos (Movie/Episode/etc.).
         if (e.Item is not Video item)
         {
@@ -532,12 +613,6 @@ private static object? GetPropertyValue(object obj, string name)
 
         var itemName = item.Name ?? string.Empty;
         var itemPath = item.Path ?? string.Empty;
-
-        var ud = e.UserData;
-        if (ud is null)
-        {
-            return;
-        }
 
         string key = userId.ToString("N", CultureInfo.InvariantCulture) + ":" + item.Id.ToString("N", CultureInfo.InvariantCulture);
         var state = _state.GetOrAdd(key, _ => new SyncState());
@@ -552,7 +627,6 @@ private static object? GetPropertyValue(object obj, string name)
         state.ItemPath = itemPath;
         state.ItemName = itemName;
 
-        var nowUtc = DateTime.UtcNow;
         state.LastActivityUtc = nowUtc;
 
         // Track real watched time (best-effort) by looking at how the playback position changes.
@@ -572,6 +646,52 @@ private static object? GetPropertyValue(object obj, string name)
                 if (!string.IsNullOrWhiteSpace(resolved))
                 {
                     state.SceneId = resolved;
+                }
+            }
+        }
+
+        // 0) Favorite videos -> set Stash rating (optional).
+        if (cfg.SyncFavoriteToRating)
+        {
+            var isFavorite = TryGetBoolProperty(ud, "IsFavorite", "IsFavourite");
+            if (isFavorite is not null)
+            {
+                var saveReason = GetPropertyValue(e, "SaveReason")?.ToString() ?? string.Empty;
+                var reasonLooksLikeFavorite = saveReason.IndexOf("favorite", StringComparison.OrdinalIgnoreCase) >= 0
+                    || saveReason.IndexOf("favour", StringComparison.OrdinalIgnoreCase) >= 0;
+
+                // Avoid accidental overwrites: if we have no baseline yet, only act on Favorite=true (safe)
+                // or when the save reason explicitly looks like a favorite toggle.
+                var shouldConsider = reasonLooksLikeFavorite || isFavorite.Value || state.LastIsFavorite is not null;
+
+                if (shouldConsider && (state.LastIsFavorite is null || state.LastIsFavorite.Value != isFavorite.Value || reasonLooksLikeFavorite))
+                {
+                    var sceneIdForFav = await _stashClient.ResolveSceneIdAsync(item, CancellationToken.None).ConfigureAwait(false);
+                    var rating = isFavorite.Value ? 5 : 0;
+
+                    if (!string.IsNullOrWhiteSpace(sceneIdForFav))
+                    {
+                        var ok = await _stashClient.SetSceneRatingAsync(sceneIdForFav!, rating, CancellationToken.None).ConfigureAwait(false);
+                        if (ok)
+                        {
+                            _logger.LogInformation(
+                                "StashWatchSync: updated scene rating from favorite. sceneId={SceneId} rating={Rating} userId={UserId} itemId={ItemId} name={Name}",
+                                sceneIdForFav, rating, userId, item.Id, itemName);
+                        }
+                        else
+                        {
+                            _logger.LogWarning(
+                                "StashWatchSync: failed to update scene rating from favorite. sceneId={SceneId} rating={Rating} userId={UserId} itemId={ItemId} name={Name}",
+                                sceneIdForFav, rating, userId, item.Id, itemName);
+                        }
+                    }
+
+                    state.LastIsFavorite = isFavorite.Value;
+                }
+                else if (state.LastIsFavorite is null)
+                {
+                    // Establish baseline without writing to Stash.
+                    state.LastIsFavorite = isFavorite.Value;
                 }
             }
         }
@@ -726,6 +846,10 @@ var ok = await _stashClient.SyncPlayedAsync(sceneId!, playCountDelta: 0, playedD
         public int LastPlayCount { get; set; }
         public double LastResumeSeconds { get; set; }
         public DateTime LastResumeSentUtc { get; set; } = DateTime.MinValue;
+
+        public bool? LastIsFavorite { get; set; } = null;
+        public DateTime LastFavoriteSentUtc { get; set; } = DateTime.MinValue;
+
 
         // Cached identity info for background flush.
         public string? SceneId { get; set; }

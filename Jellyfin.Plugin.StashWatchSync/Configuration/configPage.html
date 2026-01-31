@@ -42,6 +42,27 @@
                             </label>
                             <div class="fieldDescription">Adds the <em>real watched time</em> (estimated from playback progress) to Stash — for both finished and unfinished sessions.</div>
                         </div>
+
+
+<div class="checkboxContainer checkboxContainer-withDescription">
+    <label class="emby-checkbox-label">
+        <input id="SyncPerformerFavorites" type="checkbox" is="emby-checkbox" />
+        <span>Performer favorites</span>
+    </label>
+    <div class="fieldDescription">When you add/remove an <em>actor/person</em> to favorites in Jellyfin, the corresponding performer in Stash is also added/removed from favorites (only if the Jellyfin person has a <code>Stash</code> provider id).</div>
+</div>
+
+
+
+
+
+                        <div class="checkboxContainer checkboxContainer-withDescription">
+                            <label class="emby-checkbox-label">
+                                <input id="SyncFavoriteToRating" type="checkbox" is="emby-checkbox" />
+                                <span>Favorite videos → Stash rating</span>
+                            </label>
+                            <div class="fieldDescription">When you add/remove a video to Jellyfin favorites, set the matching Stash scene rating to 5 / 0.</div>
+                        </div>
                         <h3 class="sectionTitle">Matching scenes</h3>
 
                         <div class="checkboxContainer checkboxContainer-withDescription">
@@ -100,6 +121,8 @@
                     $('#StashEndpoint').val(config.StashEndpoint).change();
                     $('#StashApiKey').val(config.StashApiKey).change();
                     $('#SyncPlayDuration').prop('checked', config.SyncPlayDuration);
+                    $('#SyncPerformerFavorites').prop('checked', config.SyncPerformerFavorites);
+                    $('#SyncFavoriteToRating').prop('checked', config.SyncFavoriteToRating);
 
                     $('#EnablePathFallback').prop('checked', config.EnablePathFallback);
                     $('#SearchByFullPath').prop('checked', config.SearchByFullPath);
@@ -119,6 +142,8 @@
                     config.StashEndpoint = $('#StashEndpoint').val();
                     config.StashApiKey = $('#StashApiKey').val();
                     config.SyncPlayDuration = $('#SyncPlayDuration').prop('checked');
+                    config.SyncPerformerFavorites = $('#SyncPerformerFavorites').prop('checked');
+                    config.SyncFavoriteToRating = $('#SyncFavoriteToRating').prop('checked');
 
                     config.EnablePathFallback = $('#EnablePathFallback').prop('checked');
                     config.SearchByFullPath = $('#SearchByFullPath').prop('checked');

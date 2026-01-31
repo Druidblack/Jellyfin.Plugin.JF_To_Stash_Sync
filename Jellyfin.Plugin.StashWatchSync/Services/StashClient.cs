@@ -49,6 +49,19 @@ public sealed class StashClient
   }
 }";
 
+    private const string PerformerUpdateMutation = @"mutation performerUpdate($input: PerformerUpdateInput!) {
+  performerUpdate(input: $input) {
+    id
+    favorite
+  }
+}";
+
+    private const string SceneUpdateMinimalMutation = @"mutation sceneUpdate($input: SceneUpdateInput!) {
+  sceneUpdate(input: $input) {
+    id
+  }
+}";
+
     // Introspection helpers to discover the correct signatures for play-count mutations.
     // Some Stash builds changed these signatures over time; introspection keeps us version-agnostic.
     private const string IntrospectMutationTypeQuery = @"query IntrospectMutationType($typeName: String!) {
@@ -391,7 +404,99 @@ public sealed class StashClient
         return updated is not null && !string.IsNullOrWhiteSpace(updated.Id);
     }
 
-    private async Task<GraphQlModels.GraphQlResponse<T>?> SendAsync<T>(string query, object variables, CancellationToken ct)
+    
+
+/// <summary>
+/// Set performer favorite state in Stash.
+/// </summary>
+public async Task<bool> SetPerformerFavoriteAsync(string performerId, bool isFavorite, CancellationToken ct)
+{
+    if (string.IsNullOrWhiteSpace(performerId))
+    {
+        return false;
+    }
+
+    var input = new JObject
+    {
+        ["id"] = performerId,
+        ["favorite"] = isFavorite
+    };
+
+    var resp = await SendAsync<GraphQlModels.PerformerUpdateData>(PerformerUpdateMutation, new { input }, ct).ConfigureAwait(false);
+    if (resp is null)
+    {
+        return false;
+    }
+
+    if (resp.Errors is not null && resp.Errors.Length > 0)
+    {
+        return false;
+    }
+
+    var updated = resp.Data?.PerformerUpdate;
+    return updated is not null && !string.IsNullOrWhiteSpace(updated.Id);
+}
+
+    public async Task<bool> SetSceneRatingAsync(string sceneId, int rating5, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(sceneId))
+        {
+            return false;
+        }
+
+        // Stash typically stores rating on a 0..100 scale (rating100).
+        // We still try both rating100 and rating for compatibility.
+        rating5 = Math.Clamp(rating5, 0, 5);
+
+        var ok = await TryUpdateSceneRatingAsync(sceneId, rating5, preferRating100: true, ct).ConfigureAwait(false);
+        if (ok)
+        {
+            return true;
+        }
+
+        return await TryUpdateSceneRatingAsync(sceneId, rating5, preferRating100: false, ct).ConfigureAwait(false);
+    }
+
+    private async Task<bool> TryUpdateSceneRatingAsync(string sceneId, int rating5, bool preferRating100, CancellationToken ct)
+    {
+        var cfg = Plugin.Instance?.Configuration;
+        if (cfg is null || !cfg.Enabled)
+        {
+            return false;
+        }
+
+        var input = new JObject
+        {
+            ["id"] = sceneId,
+        };
+
+        if (preferRating100)
+        {
+            // Map 0..5 => 0..100 in steps of 20.
+            input["rating100"] = rating5 <= 0 ? 0 : rating5 * 20;
+        }
+        else
+        {
+            input["rating"] = rating5;
+        }
+
+        var resp = await SendAsync<GraphQlModels.SceneUpdateData>(SceneUpdateMinimalMutation, new { input }, ct).ConfigureAwait(false);
+        if (resp is null)
+        {
+            return false;
+        }
+
+        if (resp.Errors is not null && resp.Errors.Length > 0)
+        {
+            // Errors are already logged by SendAsync.
+            return false;
+        }
+
+        var updated = resp.Data?.SceneUpdate;
+        return updated is not null && !string.IsNullOrWhiteSpace(updated.Id);
+    }
+
+private async Task<GraphQlModels.GraphQlResponse<T>?> SendAsync<T>(string query, object variables, CancellationToken ct)
     {
         var cfg = Plugin.Instance?.Configuration;
         if (cfg is null || !cfg.Enabled || string.IsNullOrWhiteSpace(cfg.StashEndpoint))

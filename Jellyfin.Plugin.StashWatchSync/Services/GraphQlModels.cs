@@ -73,4 +73,19 @@ public static class GraphQlModels
         [JsonProperty("play_duration")]
         public double? PlayDuration { get; set; }
     }
+
+    public sealed class PerformerUpdateData
+    {
+        [JsonProperty("performerUpdate")]
+        public Performer? PerformerUpdate { get; set; }
+    }
+
+    public sealed class Performer
+    {
+        [JsonProperty("id")]
+        public string Id { get; set; } = string.Empty;
+
+        [JsonProperty("favorite")]
+        public bool? Favorite { get; set; }
+    }
 }
