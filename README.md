@@ -19,3 +19,11 @@ https://raw.githubusercontent.com/Druidblack/Jellyfin.Plugin.JF_To_Stash_Sync/ma
 Every video view in jellyfin will send data here:
 
 ![info](https://github.com/Druidblack/Jellyfin.Plugin.JF_To_Stash_Sync/blob/main/images/info.jpg)
+
+Synchronization Performer favorites
+
+![actor](https://github.com/Druidblack/Jellyfin.Plugin.JF_To_Stash_Sync/blob/main/images/actor.jpg)
+
+Synchronization Favorite videos → Stash rating
+
+![rating](https://github.com/Druidblack/Jellyfin.Plugin.JF_To_Stash_Sync/blob/main/images/rating.jpg)
