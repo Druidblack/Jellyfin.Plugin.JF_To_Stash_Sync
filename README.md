@@ -1,6 +1,6 @@
 # JF To Stash Sync
 ![logo](https://github.com/Druidblack/Jellyfin.Plugin.JF_To_Stash_Sync/blob/main/images/logo.jpg)
-Sync Jellyfin watch activity to Stash: increments play count for each play session and reports the real watched time.
+Sync Jellyfin activity to Stash: increments play count for each play session and reports the real watched time, Performer favorites, Favorite videos → Stash rating
 
 The video definition in stash will be based on the identifier that can be obtained using the plugin [Jellyfin.Plugin.Stash](https://github.com/DirtyRacer1337/Jellyfin.Plugin.Stash)
 
