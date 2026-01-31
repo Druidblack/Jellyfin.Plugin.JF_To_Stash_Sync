@@ -15,6 +15,15 @@
                 "sourceUrl": "https://github.com/Druidblack/Jellyfin.Plugin.JF_To_Stash_Sync/releases/download/1.0.0.1/Release-1.0.0.1.zip",
                 "checksum": "3F0B68A80A28937ACD6816031FEA44C8",
                 "timestamp": "2026-01-30 20:23:00"
+            },
+            {
+                "version": "1.0.0.2",
+                "changelog": "added synchronization Performer favorites
+added synchronization Favorite videos → Stash rating",
+                "targetAbi": "10.11.0.0",
+                "sourceUrl": "https://github.com/Druidblack/Jellyfin.Plugin.JF_To_Stash_Sync/releases/download/1.0.0.2/Release-1.0.0.2.zip",
+                "checksum": "00396B0ECDD89A30BD272D0C4FDCCE50",
+                "timestamp": "2026-01-31 10:23:00"
             }
         ]
     }
