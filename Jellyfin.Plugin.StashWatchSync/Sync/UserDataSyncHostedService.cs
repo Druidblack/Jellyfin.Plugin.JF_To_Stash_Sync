@@ -93,6 +93,7 @@ public sealed class UserDataSyncHostedService : IHostedService, IDisposable
         _sessionManager.PlaybackStart -= OnPlaybackStart;
         _sessionManager.PlaybackProgress -= OnPlaybackProgress;
         _sessionManager.PlaybackStopped -= OnPlaybackStopped;
+        _cts?.Dispose();
     }
 
 
@@ -106,6 +107,8 @@ private void OnPlaybackProgress(object? sender, PlaybackProgressEventArgs e)
 
 private void OnPlaybackStopped(object? sender, PlaybackStopEventArgs e)
     => _ = HandlePlaybackStoppedAsync(e);
+
+private CancellationToken ServiceToken => _cts?.Token ?? CancellationToken.None;
 
 private async Task HandlePlaybackProgressAsync(PlaybackProgressEventArgs e, bool isStart)
 {
@@ -259,7 +262,7 @@ private async Task HandlePlaybackStoppedAsync(PlaybackStopEventArgs e)
         var sceneId = state.SceneId;
         if (string.IsNullOrWhiteSpace(sceneId))
         {
-            sceneId = await _stashClient.ResolveSceneIdAsync(state.ProviderId, state.ItemPath, CancellationToken.None).ConfigureAwait(false);
+            sceneId = await _stashClient.ResolveSceneIdAsync(state.ProviderId, state.ItemPath, ServiceToken).ConfigureAwait(false);
             if (!string.IsNullOrWhiteSpace(sceneId))
             {
                 state.SceneId = sceneId;
@@ -275,7 +278,7 @@ private async Task HandlePlaybackStoppedAsync(PlaybackStopEventArgs e)
         // 1) Increment play count ONCE per playback session (even if the item is not marked Played in Jellyfin).
         // Play-count syncing is always enabled (UI option removed).
         {
-            var incOk = await _stashClient.IncrementPlayCountOnlyAsync(sceneId, 1, CancellationToken.None).ConfigureAwait(false);
+            var incOk = await _stashClient.IncrementPlayCountOnlyAsync(sceneId, 1, ServiceToken).ConfigureAwait(false);
             if (!incOk)
             {
                 _logger.LogWarning("StashWatchSync: failed to increment play count on playback stop. sceneId={SceneId}", sceneId);
@@ -290,12 +293,11 @@ private async Task HandlePlaybackStoppedAsync(PlaybackStopEventArgs e)
         if (cfg.SyncInProgressPlayDuration)
         {
             var pendingSeconds = state.SessionWatchedSeconds;
-            if (pendingSeconds >= 0.5 && !state.DurationSyncInFlight)
+            if (pendingSeconds >= 0.5 && Interlocked.CompareExchange(ref state.DurationSyncInFlight, 1, 0) == 0)
             {
-                state.DurationSyncInFlight = true;
                 try
                 {
-                    var ok = await _stashClient.AddPlayDurationAsync(sceneId, pendingSeconds, CancellationToken.None).ConfigureAwait(false);
+                    var ok = await _stashClient.AddPlayDurationAsync(sceneId, pendingSeconds, ServiceToken).ConfigureAwait(false);
                     if (ok)
                     {
                         _logger.LogInformation(
@@ -308,7 +310,7 @@ private async Task HandlePlaybackStoppedAsync(PlaybackStopEventArgs e)
                 }
                 finally
                 {
-                    state.DurationSyncInFlight = false;
+                    Interlocked.Exchange(ref state.DurationSyncInFlight, 0);
                 }
             }
         }
@@ -410,7 +412,17 @@ private static bool? TryGetBoolProperty(object obj, params string[] names)
 
                         var state = kv.Value;
 
-                        if (state.DurationSyncInFlight)
+                        // Bound memory usage: old item/user states are not useful forever.
+                        if (state.LastActivityUtc != DateTime.MinValue
+                            && nowUtc - state.LastActivityUtc > TimeSpan.FromHours(24)
+                            && state.SessionWatchedSeconds < 0.5
+                            && Volatile.Read(ref state.DurationSyncInFlight) == 0)
+                        {
+                            _state.TryRemove(kv.Key, out _);
+                            continue;
+                        }
+
+                        if (Volatile.Read(ref state.DurationSyncInFlight) != 0)
                         {
                             continue;
                         }
@@ -441,7 +453,10 @@ private static bool? TryGetBoolProperty(object obj, params string[] names)
                             continue;
                         }
 
-                        state.DurationSyncInFlight = true;
+                        if (Interlocked.CompareExchange(ref state.DurationSyncInFlight, 1, 0) != 0)
+                        {
+                            continue;
+                        }
 
                         try
                         {
@@ -485,7 +500,7 @@ private static bool? TryGetBoolProperty(object obj, params string[] names)
                         }
                         finally
                         {
-                            state.DurationSyncInFlight = false;
+                            Interlocked.Exchange(ref state.DurationSyncInFlight, 0);
                         }
                     }
                 }
@@ -515,8 +530,23 @@ private static bool? TryGetBoolProperty(object obj, params string[] names)
 
     private void OnUserDataSaved(object? sender, UserDataSaveEventArgs e)
     {
-        // Fire-and-forget, but keep it async-safe.
-        _ = HandleAsync(e);
+        _ = HandleUserDataSavedSafeAsync(e);
+    }
+
+    private async Task HandleUserDataSavedSafeAsync(UserDataSaveEventArgs e)
+    {
+        try
+        {
+            await HandleAsync(e).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (ServiceToken.IsCancellationRequested)
+        {
+            // Normal during server/plugin shutdown.
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "StashWatchSync: user-data handler error");
+        }
     }
 
     private async Task HandleAsync(UserDataSaveEventArgs e)
@@ -578,7 +608,7 @@ private static bool? TryGetBoolProperty(object obj, params string[] names)
                 return;
             }
 
-            var ok = await _stashClient.SetPerformerFavoriteAsync(stashPerformerId, isFavorite, CancellationToken.None).ConfigureAwait(false);
+            var ok = await _stashClient.SetPerformerFavoriteAsync(stashPerformerId, isFavorite, ServiceToken).ConfigureAwait(false);
             if (ok)
             {
                 _logger.LogInformation(
@@ -642,7 +672,7 @@ private static bool? TryGetBoolProperty(object obj, params string[] names)
                 && (state.LastSceneResolveAttemptUtc == DateTime.MinValue || (nowUtc - state.LastSceneResolveAttemptUtc).TotalSeconds >= 30))
             {
                 state.LastSceneResolveAttemptUtc = nowUtc;
-                var resolved = await _stashClient.ResolveSceneIdAsync(item, CancellationToken.None).ConfigureAwait(false);
+                var resolved = await _stashClient.ResolveSceneIdAsync(item, ServiceToken).ConfigureAwait(false);
                 if (!string.IsNullOrWhiteSpace(resolved))
                 {
                     state.SceneId = resolved;
@@ -666,12 +696,12 @@ private static bool? TryGetBoolProperty(object obj, params string[] names)
 
                 if (shouldConsider && (state.LastIsFavorite is null || state.LastIsFavorite.Value != isFavorite.Value || reasonLooksLikeFavorite))
                 {
-                    var sceneIdForFav = await _stashClient.ResolveSceneIdAsync(item, CancellationToken.None).ConfigureAwait(false);
+                    var sceneIdForFav = await _stashClient.ResolveSceneIdAsync(item, ServiceToken).ConfigureAwait(false);
                     var rating = isFavorite.Value ? 5 : 0;
 
                     if (!string.IsNullOrWhiteSpace(sceneIdForFav))
                     {
-                        var ok = await _stashClient.SetSceneRatingAsync(sceneIdForFav!, rating, CancellationToken.None).ConfigureAwait(false);
+                        var ok = await _stashClient.SetSceneRatingAsync(sceneIdForFav!, rating, ServiceToken).ConfigureAwait(false);
                         if (ok)
                         {
                             _logger.LogInformation(
@@ -710,7 +740,7 @@ private static bool? TryGetBoolProperty(object obj, params string[] names)
             bool shouldSend = !state.LastPlayed || ud.PlayCount != state.LastPlayCount;
             if (shouldSend)
             {
-                var sceneId = await _stashClient.ResolveSceneIdAsync(item, CancellationToken.None).ConfigureAwait(false);
+                var sceneId = await _stashClient.ResolveSceneIdAsync(item, ServiceToken).ConfigureAwait(false);
                 if (!string.IsNullOrWhiteSpace(sceneId))
                 {
                     // We sync play_count per playback session using playback stop events.
@@ -722,7 +752,7 @@ if (cfg.SyncPlayDuration)
     playedDurationSeconds = GetAndFinalizeWatchedSeconds(state, item, nowUtc);
 }
 
-var ok = await _stashClient.SyncPlayedAsync(sceneId!, playCountDelta: 0, playedDurationSeconds, CancellationToken.None).ConfigureAwait(false);
+var ok = await _stashClient.SyncPlayedAsync(sceneId!, playCountDelta: 0, playedDurationSeconds, ServiceToken).ConfigureAwait(false);
                     if (ok)
                     {
                         _logger.LogInformation(
@@ -799,13 +829,13 @@ var ok = await _stashClient.SyncPlayedAsync(sceneId!, playCountDelta: 0, playedD
                 return;
             }
 
-            var sceneId = await _stashClient.ResolveSceneIdAsync(item, CancellationToken.None).ConfigureAwait(false);
+            var sceneId = await _stashClient.ResolveSceneIdAsync(item, ServiceToken).ConfigureAwait(false);
             if (string.IsNullOrWhiteSpace(sceneId))
             {
                 return;
             }
 
-            var ok = await _stashClient.SyncResumeAsync(sceneId!, resumeSeconds, CancellationToken.None).ConfigureAwait(false);
+            var ok = await _stashClient.SyncResumeAsync(sceneId!, resumeSeconds, ServiceToken).ConfigureAwait(false);
             if (ok)
             {
                 state.LastResumeSeconds = resumeSeconds;
@@ -861,7 +891,7 @@ var ok = await _stashClient.SyncPlayedAsync(sceneId!, playCountDelta: 0, playedD
 
         // In-progress duration sync state.
         public DateTime LastDurationSentUtc { get; set; } = DateTime.MinValue;
-        public bool DurationSyncInFlight { get; set; } = false;
+        public int DurationSyncInFlight;
 
         // Real watched-time tracking (best-effort).
         public long SessionStartTicks { get; set; } = -1;
@@ -880,7 +910,6 @@ var ok = await _stashClient.SyncPlayedAsync(sceneId!, playCountDelta: 0, playedD
             LastPositionSeenUtc = DateTime.MinValue;
             SessionWatchedSeconds = 0;
             SessionWatchedSecondsTotal = 0;
-            DurationSyncInFlight = false;
         }
     }
 
@@ -972,9 +1001,7 @@ private static void UpdateWatchedTimeAccumulator(SyncState state, long playbackP
 /// <summary>
 /// Finalize watched time for a Played=true save.
 /// Tries to also estimate the "tail" (from last saved position to end) when possible.
-/// </summary> for a Played=true save.
-    /// Tries to also estimate the "tail" (from last saved position to end) when possible.
-    /// </summary>
+/// </summary>
     private static double? GetAndFinalizeWatchedSeconds(SyncState state, Video item, DateTime nowUtc)
     {
         var watched = Math.Max(0, state.SessionWatchedSeconds);

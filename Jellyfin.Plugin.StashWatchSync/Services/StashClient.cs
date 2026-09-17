@@ -344,7 +344,7 @@ public sealed class StashClient
                 else
                 {
                     // filename match
-                    if (fp.EndsWith(normSearchFile, StringComparison.Ordinal))
+                    if (string.Equals(Path.GetFileName(fp), normSearchFile, StringComparison.OrdinalIgnoreCase))
                     {
                         return s.Id;
                     }
@@ -352,8 +352,13 @@ public sealed class StashClient
             }
         }
 
-        // Fallback: first scene.
-        return scenes[0].Id;
+        // Never guess. A non-exact path/filename match could update the wrong Stash scene.
+        _logger.LogWarning(
+            "StashWatchSync: path search returned candidates but none matched exactly. search={Search} fullPath={FullPath} candidates={Count}",
+            search,
+            fullPath,
+            scenes.Count);
+        return null;
     }
 
     private async Task<bool> UpdateSceneAsync(string sceneId, double? resumeTimeSeconds, double? playDurationSeconds, CancellationToken ct)
@@ -540,6 +545,10 @@ private async Task<GraphQlModels.GraphQlResponse<T>?> SendAsync<T>(string query,
 
             return parsed;
         }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Stash GraphQL request failed");
@@ -580,7 +589,7 @@ private async Task<GraphQlModels.GraphQlResponse<T>?> SendAsync<T>(string query,
             var jp = NormalizePath(jellyfinPrefix).TrimEnd('/');
             var sp = NormalizePath(stashPrefix).TrimEnd('/');
 
-            if (!string.IsNullOrWhiteSpace(jp) && p.StartsWith(jp + "/", StringComparison.Ordinal))
+            if (!string.IsNullOrWhiteSpace(jp) && p.StartsWith(jp + "/", StringComparison.OrdinalIgnoreCase))
             {
                 p = sp + p.Substring(jp.Length);
             }
