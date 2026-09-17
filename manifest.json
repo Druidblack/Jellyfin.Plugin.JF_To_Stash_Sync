@@ -9,6 +9,14 @@
         "imageUrl": "https://raw.githubusercontent.com/Druidblack/Jellyfin.Plugin.JF_To_Stash_Sync/main/images/logo.jpg",
         "versions": [
             {
+                "version": "1.0.0.3",
+                "changelog": "support jellyfin 12",
+                "targetAbi": "12.0",
+                "sourceUrl": "https://github.com/Druidblack/Jellyfin.Plugin.JF_To_Stash_Sync/releases/download/1.0.0.3/Release-1.0.0.3.zip",
+                "checksum": "97d2d1c9d697103036b63740aad84725",
+                "timestamp": "2026-09-15T23:00:00+03:00"
+            },
+            {
                 "version": "1.0.0.2",
                 "changelog": "added synchronization Performer favorites, added synchronization Favorite videos → Stash rating",
                 "targetAbi": "10.11.0.0",
