@@ -16,8 +16,9 @@ public sealed class PluginServiceRegistrator : IPluginServiceRegistrator
         // GraphQL client to talk to Stash.
         serviceCollection.AddSingleton<StashClient>();
 
-        // Direct Jellyfin-link synchronization used by the scheduled task and manual API.
+        // Direct Jellyfin-link synchronization used by the scheduled tasks and manual API.
         serviceCollection.AddSingleton<JellyfinUrlSyncService>();
+        serviceCollection.AddSingleton<JellyfinPerformerUrlSyncService>();
 
         // Background sync service that hooks UserDataSaved.
         serviceCollection.AddHostedService<UserDataSyncHostedService>();

@@ -72,6 +72,17 @@
                             </div>
                         </div>
 
+                        <div class="checkboxContainer checkboxContainer-withDescription">
+                            <label class="emby-checkbox-label">
+                                <input id="SyncJellyfinPerformerUrls" type="checkbox" is="emby-checkbox" />
+                                <span>Sync Jellyfin actor links to Stash performers</span>
+                            </label>
+                            <div class="fieldDescription">
+                                Enables a separate scheduled task that writes the Jellyfin Person details link into the matching Stash performer URL list.
+                                A Jellyfin Person must have a <code>Stash</code> provider ID so the plugin cannot update the wrong performer.
+                            </div>
+                        </div>
+
                         <div class="inputContainer">
                             <label class="inputLabel inputLabelUnfocused" for="JellyfinBaseUrl">Jellyfin base URL</label>
                             <input id="JellyfinBaseUrl" name="JellyfinBaseUrl" type="text" is="emby-input" placeholder="http://192.168.1.201:3096" />
@@ -95,6 +106,20 @@
                             <span>Send Jellyfin link to Stash</span>
                         </button>
                         <div id="JellyfinUrlSyncStatus" class="fieldDescription" style="margin-top: .7em;"></div>
+
+                        <div class="inputContainer" style="margin-top: 1.5em;">
+                            <label class="inputLabel inputLabelUnfocused" for="ManualJellyfinPersonId">Manual test: Jellyfin actor/person ID</label>
+                            <input id="ManualJellyfinPersonId" name="ManualJellyfinPersonId" type="text" is="emby-input" placeholder="Jellyfin Person ID" />
+                            <div class="fieldDescription">
+                                Enter one Jellyfin Person ID to test performer URL synchronization. Current settings are saved first.
+                                The Person must contain a <code>Stash</code> provider ID. The test works even if automatic performer-link synchronization is disabled.
+                            </div>
+                        </div>
+
+                        <button id="SyncJellyfinPerformerUrlNow" is="emby-button" type="button" class="raised emby-button">
+                            <span>Send actor Jellyfin link to Stash</span>
+                        </button>
+                        <div id="JellyfinPerformerUrlSyncStatus" class="fieldDescription" style="margin-top: .7em;"></div>
 
                         <h3 class="sectionTitle">Matching scenes</h3>
 
@@ -155,6 +180,7 @@
                 $('#SyncFavoriteToRating').prop('checked', config.SyncFavoriteToRating);
 
                 $('#SyncJellyfinUrls').prop('checked', config.SyncJellyfinUrls === true);
+                $('#SyncJellyfinPerformerUrls').prop('checked', config.SyncJellyfinPerformerUrls === true);
                 $('#JellyfinBaseUrl').val(config.JellyfinBaseUrl || '').change();
 
                 $('#EnablePathFallback').prop('checked', config.EnablePathFallback);
@@ -174,6 +200,7 @@
                 config.SyncFavoriteToRating = $('#SyncFavoriteToRating').prop('checked');
 
                 config.SyncJellyfinUrls = $('#SyncJellyfinUrls').prop('checked');
+                config.SyncJellyfinPerformerUrls = $('#SyncJellyfinPerformerUrls').prop('checked');
                 config.JellyfinBaseUrl = $('#JellyfinBaseUrl').val();
 
                 config.EnablePathFallback = $('#EnablePathFallback').prop('checked');
@@ -203,6 +230,7 @@
             $('#ConfigurationPage').on('pageshow', function () {
                 Dashboard.showLoadingMsg();
                 $('#JellyfinUrlSyncStatus').text('');
+                $('#JellyfinPerformerUrlSyncStatus').text('');
 
                 ApiClient.getPluginConfiguration(pluginConfig.pluginUniqueId).then(function (config) {
                     fillPageFromConfig(config);
@@ -261,6 +289,59 @@
                                 Dashboard.hideLoadingMsg();
                             });
                     });
+
+
+                $('#SyncJellyfinPerformerUrlNow')
+                    .off('click.jellyfinPerformerUrlSync')
+                    .on('click.jellyfinPerformerUrlSync', function () {
+                        var personId = ($('#ManualJellyfinPersonId').val() || '').trim();
+                        if (!personId) {
+                            $('#JellyfinPerformerUrlSyncStatus').text('Enter a Jellyfin actor/person Item ID first.');
+                            return;
+                        }
+
+                        $('#JellyfinPerformerUrlSyncStatus').text('Sending actor Jellyfin link to Stash...');
+                        Dashboard.showLoadingMsg();
+
+                        saveCurrentPageConfig()
+                            .then(function () {
+                                return ApiClient.fetch({
+                                    url: ApiClient.getUrl('JFToStashSync/SyncJellyfinPerformerUrl') + '?personId=' + encodeURIComponent(personId),
+                                    type: 'POST'
+                                });
+                            })
+                            .then(function (response) {
+                                return response.json().then(function (body) {
+                                    if (!response.ok) {
+                                        throw new Error(
+                                            getResultValue(body, 'message', 'Message') ||
+                                            'The actor Jellyfin link could not be synchronized.'
+                                        );
+                                    }
+
+                                    return body;
+                                });
+                            })
+                            .then(function (result) {
+                                var message = getResultValue(result, 'message', 'Message') || 'Actor Jellyfin link synchronized.';
+                                var url = getResultValue(result, 'url', 'Url') || '';
+                                var performerId = getResultValue(result, 'performerId', 'PerformerId') || '';
+
+                                $('#JellyfinPerformerUrlSyncStatus').text(
+                                    message +
+                                    (performerId ? ' Stash performer: ' + performerId + '.' : '') +
+                                    (url ? ' URL: ' + url : '')
+                                );
+                                Dashboard.hideLoadingMsg();
+                            })
+                            .catch(function (error) {
+                                $('#JellyfinPerformerUrlSyncStatus').text(
+                                    'Error: ' + (error && error.message ? error.message : error)
+                                );
+                                Dashboard.hideLoadingMsg();
+                            });
+                    });
+
             });
 
             $('#ConfigurationPage').on('submit', function () {

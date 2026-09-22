@@ -65,6 +65,22 @@ public sealed class StashClient
   }
 }";
 
+    private const string FindPerformerUrlsQuery = @"query findPerformer($id: ID!) {
+  findPerformer(id: $id) {
+    id
+    name
+    urls
+  }
+}";
+
+    private const string PerformerUrlsUpdateMutation = @"mutation performerUpdate($input: PerformerUpdateInput!) {
+  performerUpdate(input: $input) {
+    id
+    name
+    urls
+  }
+}";
+
     private const string PerformerUpdateMutation = @"mutation performerUpdate($input: PerformerUpdateInput!) {
   performerUpdate(input: $input) {
     id
@@ -593,6 +609,130 @@ public sealed class StashClient
         }
 
         return true;
+    }
+
+    /// <summary>
+    /// Adds or replaces the Jellyfin details URL for a Stash performer.
+    /// All unrelated performer URLs are preserved. Existing Jellyfin details URLs
+    /// from the same host and port are collapsed to the supplied URL.
+    /// </summary>
+    public async Task<JellyfinUrlUpsertResult> UpsertJellyfinPerformerUrlAsync(
+        string performerId,
+        string jellyfinUrl,
+        CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(performerId))
+        {
+            return JellyfinUrlUpsertResult.Failure("Stash performer id is empty.");
+        }
+
+        if (!Uri.TryCreate(jellyfinUrl, UriKind.Absolute, out var targetUri)
+            || (targetUri.Scheme != Uri.UriSchemeHttp && targetUri.Scheme != Uri.UriSchemeHttps))
+        {
+            return JellyfinUrlUpsertResult.Failure("The Jellyfin URL is not a valid HTTP/HTTPS URL.");
+        }
+
+        var existingResponse = await SendAsync<GraphQlModels.FindPerformerUrlsData>(
+            FindPerformerUrlsQuery,
+            new { id = performerId },
+            ct).ConfigureAwait(false);
+
+        if (existingResponse is null || existingResponse.Errors is { Length: > 0 })
+        {
+            return JellyfinUrlUpsertResult.Failure("Could not read the current Stash performer URLs.");
+        }
+
+        var performer = existingResponse.Data?.FindPerformer;
+        if (performer is null || string.IsNullOrWhiteSpace(performer.Id))
+        {
+            return JellyfinUrlUpsertResult.Failure($"Stash performer {performerId} was not found.");
+        }
+
+        var oldUrls = performer.Urls ?? new List<string>();
+        var newUrls = new List<string>(oldUrls.Count + 1);
+        var targetInserted = false;
+        var replacedCount = 0;
+
+        foreach (var rawUrl in oldUrls)
+        {
+            if (string.IsNullOrWhiteSpace(rawUrl))
+            {
+                continue;
+            }
+
+            var existingUrl = rawUrl.Trim();
+            if (!IsJellyfinDetailsUrlForSameServer(existingUrl, targetUri))
+            {
+                newUrls.Add(existingUrl);
+                continue;
+            }
+
+            if (!targetInserted)
+            {
+                newUrls.Add(jellyfinUrl);
+                targetInserted = true;
+
+                if (!UrlsEquivalent(existingUrl, jellyfinUrl))
+                {
+                    replacedCount++;
+                }
+            }
+            else
+            {
+                replacedCount++;
+            }
+        }
+
+        if (!targetInserted)
+        {
+            newUrls.Add(jellyfinUrl);
+        }
+
+        var changed = !UrlListsEqual(oldUrls, newUrls);
+        if (!changed)
+        {
+            return JellyfinUrlUpsertResult.SuccessResult(
+                changed: false,
+                replacedCount: 0,
+                finalUrlCount: newUrls.Count,
+                message: "The Stash performer already contains the current Jellyfin URL.");
+        }
+
+        var input = new JObject
+        {
+            ["id"] = performerId,
+            ["urls"] = JArray.FromObject(newUrls),
+        };
+
+        var updateResponse = await SendAsync<GraphQlModels.PerformerUrlsUpdateData>(
+            PerformerUrlsUpdateMutation,
+            new { input },
+            ct).ConfigureAwait(false);
+
+        if (updateResponse is null || updateResponse.Errors is { Length: > 0 })
+        {
+            return JellyfinUrlUpsertResult.Failure("Stash rejected the performer URL update.");
+        }
+
+        var updated = updateResponse.Data?.PerformerUpdate;
+        if (updated is null || string.IsNullOrWhiteSpace(updated.Id))
+        {
+            return JellyfinUrlUpsertResult.Failure("Stash did not return the updated performer.");
+        }
+
+        _logger.LogInformation(
+            "StashWatchSync: Jellyfin performer URL synchronized. performerId={PerformerId} replaced={ReplacedCount} url={Url}",
+            performerId,
+            replacedCount,
+            jellyfinUrl);
+
+        return JellyfinUrlUpsertResult.SuccessResult(
+            changed: true,
+            replacedCount: replacedCount,
+            finalUrlCount: updated.Urls?.Count ?? newUrls.Count,
+            message: replacedCount > 0
+                ? "Jellyfin URL was replaced on the Stash performer."
+                : "Jellyfin URL was added to the Stash performer.");
     }
 
 /// <summary>

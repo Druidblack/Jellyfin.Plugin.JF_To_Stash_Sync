@@ -13,10 +13,14 @@ namespace StashWatchSync.Api;
 public sealed class JellyfinUrlSyncController : ControllerBase
 {
     private readonly JellyfinUrlSyncService _syncService;
+    private readonly JellyfinPerformerUrlSyncService _performerSyncService;
 
-    public JellyfinUrlSyncController(JellyfinUrlSyncService syncService)
+    public JellyfinUrlSyncController(
+        JellyfinUrlSyncService syncService,
+        JellyfinPerformerUrlSyncService performerSyncService)
     {
         _syncService = syncService;
+        _performerSyncService = performerSyncService;
     }
 
     [HttpPost("SyncJellyfinUrl")]
@@ -25,6 +29,23 @@ public sealed class JellyfinUrlSyncController : ControllerBase
         CancellationToken cancellationToken)
     {
         var result = await _syncService.SyncByItemIdAsync(itemId, cancellationToken).ConfigureAwait(false);
+        if (!result.Success)
+        {
+            return BadRequest(result);
+        }
+
+        return Ok(result);
+    }
+
+    [HttpPost("SyncJellyfinPerformerUrl")]
+    public async Task<ActionResult<JellyfinPerformerUrlSyncResult>> SyncJellyfinPerformerUrl(
+        [FromQuery] string personId,
+        CancellationToken cancellationToken)
+    {
+        var result = await _performerSyncService
+            .SyncByPersonIdAsync(personId, cancellationToken)
+            .ConfigureAwait(false);
+
         if (!result.Success)
         {
             return BadRequest(result);

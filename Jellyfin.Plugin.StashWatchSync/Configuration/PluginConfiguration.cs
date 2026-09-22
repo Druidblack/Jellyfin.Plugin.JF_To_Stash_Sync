@@ -89,6 +89,13 @@ public bool SyncPerformerFavorites { get; set; } = false;
     public bool SyncJellyfinUrls { get; set; } = false;
 
     /// <summary>
+    /// When enabled, the scheduled task writes a direct Jellyfin Person details URL
+    /// to the matching Stash performer. Matching requires the Jellyfin Person to have
+    /// a Stash provider id.
+    /// </summary>
+    public bool SyncJellyfinPerformerUrls { get; set; } = false;
+
+    /// <summary>
     /// Base Jellyfin URL that Stash users can open, for example
     /// http://192.168.1.201:3096 or https://example.org/jellyfin.
     /// </summary>

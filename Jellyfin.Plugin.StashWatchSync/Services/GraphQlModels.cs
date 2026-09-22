@@ -99,6 +99,30 @@ public static class GraphQlModels
         public List<string> Urls { get; set; } = new();
     }
 
+    public sealed class FindPerformerUrlsData
+    {
+        [JsonProperty("findPerformer")]
+        public PerformerUrls? FindPerformer { get; set; }
+    }
+
+    public sealed class PerformerUrlsUpdateData
+    {
+        [JsonProperty("performerUpdate")]
+        public PerformerUrls? PerformerUpdate { get; set; }
+    }
+
+    public sealed class PerformerUrls
+    {
+        [JsonProperty("id")]
+        public string Id { get; set; } = string.Empty;
+
+        [JsonProperty("name")]
+        public string? Name { get; set; }
+
+        [JsonProperty("urls")]
+        public List<string> Urls { get; set; } = new();
+    }
+
     public sealed class PerformerUpdateData
     {
         [JsonProperty("performerUpdate")]
