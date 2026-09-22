@@ -1,6 +1,6 @@
 # JF To Stash Sync
 ![logo](https://github.com/Druidblack/Jellyfin.Plugin.JF_To_Stash_Sync/blob/main/images/logo.jpg)
-Jellyfin plugin for Synchronizing Jellyfin activity with Stash: increases the number of views for each game session and displays the real viewing time, selected artists, favorite videos → Stash rating
+Jellyfin plugin for Synchronizing Jellyfin activity with Stash: increases the number of views for each game session and displays the real viewing time, selected artists, favorite videos → Stash rating, adds jellyfin links to the stash data (It’s needed for the plugin https://github.com/Druidblack/stash-plugin/tree/main/plugins/open_in_jellyfin )
 
 The video definition in stash will be based on the identifier that can be obtained using the plugin [Jellyfin.Plugin.Stash](https://github.com/DirtyRacer1337/Jellyfin.Plugin.Stash)
 
