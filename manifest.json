@@ -9,6 +9,14 @@
         "imageUrl": "https://raw.githubusercontent.com/Druidblack/Jellyfin.Plugin.JF_To_Stash_Sync/main/images/logo.jpg",
         "versions": [
             {
+                "version": "1.2.0.0",
+                "changelog": "add link jellyfin in url stash",
+                "targetAbi": "12.0",
+                "sourceUrl": "https://github.com/Druidblack/Jellyfin.Plugin.JF_To_Stash_Sync/releases/download/1.2.0.0/Release-1.2.0.0.zip",
+                "checksum": "bc7d0a6a44faa7934d479dc778ab3d8a",
+                "timestamp": "2026-09-21T10:00:00+03:00"
+            },
+            {
                 "version": "1.0.0.3",
                 "changelog": "support jellyfin 12",
                 "targetAbi": "12.0",
