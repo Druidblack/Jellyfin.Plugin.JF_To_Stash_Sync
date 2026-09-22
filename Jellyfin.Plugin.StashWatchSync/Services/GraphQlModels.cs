@@ -74,6 +74,31 @@ public static class GraphQlModels
         public double? PlayDuration { get; set; }
     }
 
+
+    public sealed class FindSceneUrlsData
+    {
+        [JsonProperty("findScene")]
+        public SceneUrls? FindScene { get; set; }
+    }
+
+    public sealed class SceneUrlsUpdateData
+    {
+        [JsonProperty("sceneUpdate")]
+        public SceneUrls? SceneUpdate { get; set; }
+    }
+
+    public sealed class SceneUrls
+    {
+        [JsonProperty("id")]
+        public string Id { get; set; } = string.Empty;
+
+        [JsonProperty("title")]
+        public string? Title { get; set; }
+
+        [JsonProperty("urls")]
+        public List<string> Urls { get; set; } = new();
+    }
+
     public sealed class PerformerUpdateData
     {
         [JsonProperty("performerUpdate")]

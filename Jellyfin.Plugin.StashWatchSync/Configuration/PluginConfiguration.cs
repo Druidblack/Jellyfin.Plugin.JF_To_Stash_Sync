@@ -81,6 +81,19 @@ public bool SyncPerformerFavorites { get; set; } = false;
     /// <summary>Minimum interval (seconds) between resume updates per item+user.</summary>
     public int MinResumeIntervalSeconds { get; set; } = 60;
 
+
+    /// <summary>
+    /// When enabled, the scheduled task writes a direct Jellyfin details URL
+    /// to the matching Stash scene.
+    /// </summary>
+    public bool SyncJellyfinUrls { get; set; } = false;
+
+    /// <summary>
+    /// Base Jellyfin URL that Stash users can open, for example
+    /// http://192.168.1.201:3096 or https://example.org/jellyfin.
+    /// </summary>
+    public string JellyfinBaseUrl { get; set; } = string.Empty;
+
     /// <summary>If the item has no Stash provider id, attempt to find it by file path.</summary>
     public bool EnablePathFallback { get; set; } = true;
 

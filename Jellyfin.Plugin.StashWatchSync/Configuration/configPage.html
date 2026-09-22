@@ -43,18 +43,13 @@
                             <div class="fieldDescription">Adds the <em>real watched time</em> (estimated from playback progress) to Stash — for both finished and unfinished sessions.</div>
                         </div>
 
-
-<div class="checkboxContainer checkboxContainer-withDescription">
-    <label class="emby-checkbox-label">
-        <input id="SyncPerformerFavorites" type="checkbox" is="emby-checkbox" />
-        <span>Performer favorites</span>
-    </label>
-    <div class="fieldDescription">When you add/remove an <em>actor/person</em> to favorites in Jellyfin, the corresponding performer in Stash is also added/removed from favorites (only if the Jellyfin person has a <code>Stash</code> provider id).</div>
-</div>
-
-
-
-
+                        <div class="checkboxContainer checkboxContainer-withDescription">
+                            <label class="emby-checkbox-label">
+                                <input id="SyncPerformerFavorites" type="checkbox" is="emby-checkbox" />
+                                <span>Performer favorites</span>
+                            </label>
+                            <div class="fieldDescription">When you add/remove an <em>actor/person</em> to favorites in Jellyfin, the corresponding performer in Stash is also added/removed from favorites (only if the Jellyfin person has a <code>Stash</code> provider id).</div>
+                        </div>
 
                         <div class="checkboxContainer checkboxContainer-withDescription">
                             <label class="emby-checkbox-label">
@@ -63,6 +58,44 @@
                             </label>
                             <div class="fieldDescription">When you add/remove a video to Jellyfin favorites, set the matching Stash scene rating to 5 / 0.</div>
                         </div>
+
+                        <h3 class="sectionTitle">Jellyfin links in Stash</h3>
+
+                        <div class="checkboxContainer checkboxContainer-withDescription">
+                            <label class="emby-checkbox-label">
+                                <input id="SyncJellyfinUrls" type="checkbox" is="emby-checkbox" />
+                                <span>Sync Jellyfin video links to Stash</span>
+                            </label>
+                            <div class="fieldDescription">
+                                Enables the scheduled task that writes a direct Jellyfin details link into the matching Stash scene URL list.
+                                The default task interval is 24 hours and can be changed in Jellyfin Scheduled Tasks.
+                            </div>
+                        </div>
+
+                        <div class="inputContainer">
+                            <label class="inputLabel inputLabelUnfocused" for="JellyfinBaseUrl">Jellyfin base URL</label>
+                            <input id="JellyfinBaseUrl" name="JellyfinBaseUrl" type="text" is="emby-input" placeholder="http://192.168.1.201:3096" />
+                            <div class="fieldDescription">
+                                Address that should be saved in Stash. Enter the server base URL only; the plugin adds
+                                <code>/web/index.html#/details?id=...&amp;serverId=...</code> automatically.
+                                Reverse-proxy paths such as <code>https://example.org/jellyfin</code> are supported.
+                            </div>
+                        </div>
+
+                        <div class="inputContainer">
+                            <label class="inputLabel inputLabelUnfocused" for="ManualJellyfinItemId">Manual test: Jellyfin video ID</label>
+                            <input id="ManualJellyfinItemId" name="ManualJellyfinItemId" type="text" is="emby-input" placeholder="0aeba4bd52288ce9753e1c3d91cb135a" />
+                            <div class="fieldDescription">
+                                Enter one Jellyfin video Item ID and press the button below. Current settings are saved first.
+                                The test works even if automatic scheduled synchronization is disabled.
+                            </div>
+                        </div>
+
+                        <button id="SyncJellyfinUrlNow" is="emby-button" type="button" class="raised emby-button">
+                            <span>Send Jellyfin link to Stash</span>
+                        </button>
+                        <div id="JellyfinUrlSyncStatus" class="fieldDescription" style="margin-top: .7em;"></div>
+
                         <h3 class="sectionTitle">Matching scenes</h3>
 
                         <div class="checkboxContainer checkboxContainer-withDescription">
@@ -103,7 +136,6 @@
                         <button is="emby-button" type="submit" class="raised button-submit block emby-button">
                             <span>Save</span>
                         </button>
-
                     </div>
                 </form>
             </div>
@@ -114,52 +146,137 @@
                 pluginUniqueId: '61db1999-72b9-4f58-ac15-25aedcabd583'
             };
 
+            function fillPageFromConfig(config) {
+                $('#Enabled').prop('checked', config.Enabled);
+                $('#StashEndpoint').val(config.StashEndpoint || '').change();
+                $('#StashApiKey').val(config.StashApiKey || '').change();
+                $('#SyncPlayDuration').prop('checked', config.SyncPlayDuration);
+                $('#SyncPerformerFavorites').prop('checked', config.SyncPerformerFavorites);
+                $('#SyncFavoriteToRating').prop('checked', config.SyncFavoriteToRating);
+
+                $('#SyncJellyfinUrls').prop('checked', config.SyncJellyfinUrls === true);
+                $('#JellyfinBaseUrl').val(config.JellyfinBaseUrl || '').change();
+
+                $('#EnablePathFallback').prop('checked', config.EnablePathFallback);
+                $('#SearchByFullPath').prop('checked', config.SearchByFullPath);
+                $('#JellyfinPathPrefix').val(config.JellyfinPathPrefix || '').change();
+                $('#StashPathPrefix').val(config.StashPathPrefix || '').change();
+
+                $('#OnlyUserIdsCsv').val(config.OnlyUserIdsCsv || '').change();
+            }
+
+            function applyPageToConfig(config) {
+                config.Enabled = $('#Enabled').prop('checked');
+                config.StashEndpoint = $('#StashEndpoint').val();
+                config.StashApiKey = $('#StashApiKey').val();
+                config.SyncPlayDuration = $('#SyncPlayDuration').prop('checked');
+                config.SyncPerformerFavorites = $('#SyncPerformerFavorites').prop('checked');
+                config.SyncFavoriteToRating = $('#SyncFavoriteToRating').prop('checked');
+
+                config.SyncJellyfinUrls = $('#SyncJellyfinUrls').prop('checked');
+                config.JellyfinBaseUrl = $('#JellyfinBaseUrl').val();
+
+                config.EnablePathFallback = $('#EnablePathFallback').prop('checked');
+                config.SearchByFullPath = $('#SearchByFullPath').prop('checked');
+                config.JellyfinPathPrefix = $('#JellyfinPathPrefix').val();
+                config.StashPathPrefix = $('#StashPathPrefix').val();
+
+                config.OnlyUserIdsCsv = $('#OnlyUserIdsCsv').val();
+                return config;
+            }
+
+            function saveCurrentPageConfig() {
+                return ApiClient.getPluginConfiguration(pluginConfig.pluginUniqueId).then(function (config) {
+                    applyPageToConfig(config);
+                    return ApiClient.updatePluginConfiguration(pluginConfig.pluginUniqueId, config);
+                });
+            }
+
+            function getResultValue(result, camelName, pascalName) {
+                if (result && result[camelName] !== undefined) {
+                    return result[camelName];
+                }
+
+                return result ? result[pascalName] : undefined;
+            }
+
             $('#ConfigurationPage').on('pageshow', function () {
                 Dashboard.showLoadingMsg();
+                $('#JellyfinUrlSyncStatus').text('');
+
                 ApiClient.getPluginConfiguration(pluginConfig.pluginUniqueId).then(function (config) {
-                    $('#Enabled').prop('checked', config.Enabled);
-                    $('#StashEndpoint').val(config.StashEndpoint).change();
-                    $('#StashApiKey').val(config.StashApiKey).change();
-                    $('#SyncPlayDuration').prop('checked', config.SyncPlayDuration);
-                    $('#SyncPerformerFavorites').prop('checked', config.SyncPerformerFavorites);
-                    $('#SyncFavoriteToRating').prop('checked', config.SyncFavoriteToRating);
-
-                    $('#EnablePathFallback').prop('checked', config.EnablePathFallback);
-                    $('#SearchByFullPath').prop('checked', config.SearchByFullPath);
-                    $('#JellyfinPathPrefix').val(config.JellyfinPathPrefix).change();
-                    $('#StashPathPrefix').val(config.StashPathPrefix).change();
-
-                    $('#OnlyUserIdsCsv').val(config.OnlyUserIdsCsv).change();
-
+                    fillPageFromConfig(config);
+                    Dashboard.hideLoadingMsg();
+                }).catch(function () {
                     Dashboard.hideLoadingMsg();
                 });
+
+                $('#SyncJellyfinUrlNow')
+                    .off('click.jellyfinUrlSync')
+                    .on('click.jellyfinUrlSync', function () {
+                        var itemId = ($('#ManualJellyfinItemId').val() || '').trim();
+                        if (!itemId) {
+                            $('#JellyfinUrlSyncStatus').text('Enter a Jellyfin video Item ID first.');
+                            return;
+                        }
+
+                        $('#JellyfinUrlSyncStatus').text('Sending Jellyfin link to Stash...');
+                        Dashboard.showLoadingMsg();
+
+                        saveCurrentPageConfig()
+                            .then(function () {
+                                return ApiClient.fetch({
+                                    url: ApiClient.getUrl('JFToStashSync/SyncJellyfinUrl') + '?itemId=' + encodeURIComponent(itemId),
+                                    type: 'POST'
+                                });
+                            })
+                            .then(function (response) {
+                                return response.json().then(function (body) {
+                                    if (!response.ok) {
+                                        throw new Error(
+                                            getResultValue(body, 'message', 'Message') ||
+                                            'The Jellyfin link could not be synchronized.'
+                                        );
+                                    }
+
+                                    return body;
+                                });
+                            })
+                            .then(function (result) {
+                                var message = getResultValue(result, 'message', 'Message') || 'Jellyfin link synchronized.';
+                                var url = getResultValue(result, 'url', 'Url') || '';
+                                var sceneId = getResultValue(result, 'sceneId', 'SceneId') || '';
+
+                                $('#JellyfinUrlSyncStatus').text(
+                                    message +
+                                    (sceneId ? ' Stash scene: ' + sceneId + '.' : '') +
+                                    (url ? ' URL: ' + url : '')
+                                );
+                                Dashboard.hideLoadingMsg();
+                            })
+                            .catch(function (error) {
+                                $('#JellyfinUrlSyncStatus').text(
+                                    'Error: ' + (error && error.message ? error.message : error)
+                                );
+                                Dashboard.hideLoadingMsg();
+                            });
+                    });
             });
 
             $('#ConfigurationPage').on('submit', function () {
                 Dashboard.showLoadingMsg();
-                ApiClient.getPluginConfiguration(pluginConfig.pluginUniqueId).then(function (config) {
-                    config.Enabled = $('#Enabled').prop('checked');
-                    config.StashEndpoint = $('#StashEndpoint').val();
-                    config.StashApiKey = $('#StashApiKey').val();
-                    config.SyncPlayDuration = $('#SyncPlayDuration').prop('checked');
-                    config.SyncPerformerFavorites = $('#SyncPerformerFavorites').prop('checked');
-                    config.SyncFavoriteToRating = $('#SyncFavoriteToRating').prop('checked');
 
-                    config.EnablePathFallback = $('#EnablePathFallback').prop('checked');
-                    config.SearchByFullPath = $('#SearchByFullPath').prop('checked');
-                    config.JellyfinPathPrefix = $('#JellyfinPathPrefix').val();
-                    config.StashPathPrefix = $('#StashPathPrefix').val();
-
-                    config.OnlyUserIdsCsv = $('#OnlyUserIdsCsv').val();
-
-                    ApiClient.updatePluginConfiguration(pluginConfig.pluginUniqueId, config).then(function (result) {
+                saveCurrentPageConfig()
+                    .then(function (result) {
                         Dashboard.processPluginConfigurationUpdateResult(result);
+                    })
+                    .catch(function () {
+                        Dashboard.hideLoadingMsg();
                     });
-                });
+
                 return false;
             });
         </script>
-
     </div>
 </body>
 </html>

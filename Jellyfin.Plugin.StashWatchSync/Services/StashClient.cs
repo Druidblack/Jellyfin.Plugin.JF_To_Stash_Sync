@@ -49,6 +49,22 @@ public sealed class StashClient
   }
 }";
 
+    private const string FindSceneUrlsQuery = @"query findScene($id: ID!) {
+  findScene(id: $id) {
+    id
+    title
+    urls
+  }
+}";
+
+    private const string SceneUrlsUpdateMutation = @"mutation sceneUpdate($input: SceneUpdateInput!) {
+  sceneUpdate(input: $input) {
+    id
+    title
+    urls
+  }
+}";
+
     private const string PerformerUpdateMutation = @"mutation performerUpdate($input: PerformerUpdateInput!) {
   performerUpdate(input: $input) {
     id
@@ -409,7 +425,175 @@ public sealed class StashClient
         return updated is not null && !string.IsNullOrWhiteSpace(updated.Id);
     }
 
-    
+
+
+
+    /// <summary>
+    /// Adds or replaces the Jellyfin details URL for a Stash scene.
+    /// All unrelated scene URLs are preserved. Existing Jellyfin details URLs
+    /// from the same host and port are collapsed to the supplied URL.
+    /// </summary>
+    public async Task<JellyfinUrlUpsertResult> UpsertJellyfinUrlAsync(
+        string sceneId,
+        string jellyfinUrl,
+        CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(sceneId))
+        {
+            return JellyfinUrlUpsertResult.Failure("Stash scene id is empty.");
+        }
+
+        if (!Uri.TryCreate(jellyfinUrl, UriKind.Absolute, out var targetUri)
+            || (targetUri.Scheme != Uri.UriSchemeHttp && targetUri.Scheme != Uri.UriSchemeHttps))
+        {
+            return JellyfinUrlUpsertResult.Failure("The Jellyfin URL is not a valid HTTP/HTTPS URL.");
+        }
+
+        var existingResponse = await SendAsync<GraphQlModels.FindSceneUrlsData>(
+            FindSceneUrlsQuery,
+            new { id = sceneId },
+            ct).ConfigureAwait(false);
+
+        if (existingResponse is null || existingResponse.Errors is { Length: > 0 })
+        {
+            return JellyfinUrlUpsertResult.Failure("Could not read the current Stash scene URLs.");
+        }
+
+        var scene = existingResponse.Data?.FindScene;
+        if (scene is null || string.IsNullOrWhiteSpace(scene.Id))
+        {
+            return JellyfinUrlUpsertResult.Failure($"Stash scene {sceneId} was not found.");
+        }
+
+        var oldUrls = scene.Urls ?? new List<string>();
+        var newUrls = new List<string>(oldUrls.Count + 1);
+        var targetInserted = false;
+        var replacedCount = 0;
+
+        foreach (var rawUrl in oldUrls)
+        {
+            if (string.IsNullOrWhiteSpace(rawUrl))
+            {
+                // Do not keep empty URL values.
+                continue;
+            }
+
+            var existingUrl = rawUrl.Trim();
+            if (!IsJellyfinDetailsUrlForSameServer(existingUrl, targetUri))
+            {
+                newUrls.Add(existingUrl);
+                continue;
+            }
+
+            if (!targetInserted)
+            {
+                newUrls.Add(jellyfinUrl);
+                targetInserted = true;
+
+                if (!UrlsEquivalent(existingUrl, jellyfinUrl))
+                {
+                    replacedCount++;
+                }
+            }
+            else
+            {
+                // More than one Jellyfin URL for the same server: collapse duplicates.
+                replacedCount++;
+            }
+        }
+
+        if (!targetInserted)
+        {
+            newUrls.Add(jellyfinUrl);
+        }
+
+        var changed = !UrlListsEqual(oldUrls, newUrls);
+        if (!changed)
+        {
+            return JellyfinUrlUpsertResult.SuccessResult(
+                changed: false,
+                replacedCount: 0,
+                finalUrlCount: newUrls.Count,
+                message: "The Stash scene already contains the current Jellyfin URL.");
+        }
+
+        var input = new JObject
+        {
+            ["id"] = sceneId,
+            ["urls"] = JArray.FromObject(newUrls),
+        };
+
+        var updateResponse = await SendAsync<GraphQlModels.SceneUrlsUpdateData>(
+            SceneUrlsUpdateMutation,
+            new { input },
+            ct).ConfigureAwait(false);
+
+        if (updateResponse is null || updateResponse.Errors is { Length: > 0 })
+        {
+            return JellyfinUrlUpsertResult.Failure("Stash rejected the scene URL update.");
+        }
+
+        var updated = updateResponse.Data?.SceneUpdate;
+        if (updated is null || string.IsNullOrWhiteSpace(updated.Id))
+        {
+            return JellyfinUrlUpsertResult.Failure("Stash did not return the updated scene.");
+        }
+
+        _logger.LogInformation(
+            "StashWatchSync: Jellyfin URL synchronized. sceneId={SceneId} replaced={ReplacedCount} url={Url}",
+            sceneId,
+            replacedCount,
+            jellyfinUrl);
+
+        return JellyfinUrlUpsertResult.SuccessResult(
+            changed: true,
+            replacedCount: replacedCount,
+            finalUrlCount: updated.Urls?.Count ?? newUrls.Count,
+            message: replacedCount > 0
+                ? "Jellyfin URL was replaced in Stash."
+                : "Jellyfin URL was added to Stash.");
+    }
+
+    private static bool IsJellyfinDetailsUrlForSameServer(string candidate, Uri target)
+    {
+        if (!Uri.TryCreate(candidate, UriKind.Absolute, out var uri))
+        {
+            return false;
+        }
+
+        if (!string.Equals(uri.Host, target.Host, StringComparison.OrdinalIgnoreCase)
+            || uri.Port != target.Port)
+        {
+            return false;
+        }
+
+        // Only replace links that look like Jellyfin web-client item details links.
+        // This avoids deleting unrelated URLs that happen to use the same host.
+        return uri.AbsolutePath.Contains("/web", StringComparison.OrdinalIgnoreCase)
+            && uri.Fragment.Contains("details", StringComparison.OrdinalIgnoreCase)
+            && uri.Fragment.Contains("id=", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool UrlsEquivalent(string left, string right)
+        => string.Equals(left.TrimEnd('/'), right.TrimEnd('/'), StringComparison.OrdinalIgnoreCase);
+
+    private static bool UrlListsEqual(IReadOnlyList<string> left, IReadOnlyList<string> right)
+    {
+        if (left.Count != right.Count)
+        {
+            return false;
+        }
+
+        for (var i = 0; i < left.Count; i++)
+        {
+            if (!string.Equals(left[i]?.Trim(), right[i]?.Trim(), StringComparison.Ordinal))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
 
 /// <summary>
 /// Set performer favorite state in Stash.
