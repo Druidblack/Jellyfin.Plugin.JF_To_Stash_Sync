@@ -9,6 +9,14 @@
         "imageUrl": "https://raw.githubusercontent.com/Druidblack/Jellyfin.Plugin.JF_To_Stash_Sync/main/images/logo.jpg",
         "versions": [
             {
+                "version": "1.2.0.1",
+                "changelog": "I added the ability to send the actor’s link from Jellyfin to Stash",
+                "targetAbi": "12.0",
+                "sourceUrl": "https://github.com/Druidblack/Jellyfin.Plugin.JF_To_Stash_Sync/releases/download/1.2.0.1/Release-1.2.0.1.zip",
+                "checksum": "811be767a0fd932b1bb963d0775c1b34",
+                "timestamp": "2026-09-21T12:00:00+03:00"
+            },
+            {
                 "version": "1.2.0.0",
                 "changelog": "add link jellyfin in url stash",
                 "targetAbi": "12.0",
