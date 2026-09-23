@@ -45,6 +45,40 @@
 
                         <div class="checkboxContainer checkboxContainer-withDescription">
                             <label class="emby-checkbox-label">
+                                <input id="SyncResumePosition" type="checkbox" is="emby-checkbox" />
+                                <span>Resume playback position (Jellyfin → Stash)</span>
+                            </label>
+                            <div class="fieldDescription">
+                                Sends Jellyfin's saved playback position to the matching Stash scene, so the Stash player can continue where you left off.
+                                Only unfinished videos are assigned a resume position. A video marked watched in Jellyfin is still marked watched in Stash as before.
+                                Stash has one shared resume position per scene, not separate positions for each Jellyfin user.
+                            </div>
+                        </div>
+
+                        <div class="inputContainer">
+                            <label class="inputLabel inputLabelUnfocused" for="ResumeUserId">Jellyfin user ID for resume-position sync (optional)</label>
+                            <input id="ResumeUserId" name="ResumeUserId" type="text" is="emby-input" placeholder="(leave empty to accept all enabled Jellyfin users)" />
+                            <div class="fieldDescription">
+                                Optional single Jellyfin user GUID to use as the source of the shared Stash resume position.
+                                With this field empty, the last playback update from any allowed Jellyfin user wins.
+                                This filter only affects resume-position updates; the existing global user filter still applies to all sync features.
+                            </div>
+                        </div>
+
+                        <div class="inputContainer">
+                            <label class="inputLabel inputLabelUnfocused" for="MinResumeIntervalSeconds">Resume update interval during playback (seconds)</label>
+                            <input id="MinResumeIntervalSeconds" type="number" min="0" max="86400" step="1" is="emby-input" />
+                            <div class="fieldDescription">Default 60. Playback-stop saves bypass the interval and send the final position immediately.</div>
+                        </div>
+
+                        <div class="inputContainer">
+                            <label class="inputLabel inputLabelUnfocused" for="MinResumeDeltaSeconds">Minimum resume-position change during playback (seconds)</label>
+                            <input id="MinResumeDeltaSeconds" type="number" min="0" max="86400" step="1" is="emby-input" />
+                            <div class="fieldDescription">Default 20. Playback-stop saves always send the final position, even for smaller changes.</div>
+                        </div>
+
+                        <div class="checkboxContainer checkboxContainer-withDescription">
+                            <label class="emby-checkbox-label">
                                 <input id="SyncPerformerFavorites" type="checkbox" is="emby-checkbox" />
                                 <span>Performer favorites</span>
                             </label>
@@ -176,6 +210,10 @@
                 $('#StashEndpoint').val(config.StashEndpoint || '').change();
                 $('#StashApiKey').val(config.StashApiKey || '').change();
                 $('#SyncPlayDuration').prop('checked', config.SyncPlayDuration);
+                $('#SyncResumePosition').prop('checked', config.SyncResumePosition === true);
+                $('#ResumeUserId').val(config.ResumeUserId || '').change();
+                $('#MinResumeIntervalSeconds').val(config.MinResumeIntervalSeconds === undefined ? 60 : config.MinResumeIntervalSeconds);
+                $('#MinResumeDeltaSeconds').val(config.MinResumeDeltaSeconds === undefined ? 20 : config.MinResumeDeltaSeconds);
                 $('#SyncPerformerFavorites').prop('checked', config.SyncPerformerFavorites);
                 $('#SyncFavoriteToRating').prop('checked', config.SyncFavoriteToRating);
 
@@ -196,6 +234,10 @@
                 config.StashEndpoint = $('#StashEndpoint').val();
                 config.StashApiKey = $('#StashApiKey').val();
                 config.SyncPlayDuration = $('#SyncPlayDuration').prop('checked');
+                config.SyncResumePosition = $('#SyncResumePosition').prop('checked');
+                config.ResumeUserId = ($('#ResumeUserId').val() || '').trim();
+                config.MinResumeIntervalSeconds = Math.max(0, Math.min(86400, Number($('#MinResumeIntervalSeconds').val()) || 0));
+                config.MinResumeDeltaSeconds = Math.max(0, Math.min(86400, Number($('#MinResumeDeltaSeconds').val()) || 0));
                 config.SyncPerformerFavorites = $('#SyncPerformerFavorites').prop('checked');
                 config.SyncFavoriteToRating = $('#SyncFavoriteToRating').prop('checked');
 

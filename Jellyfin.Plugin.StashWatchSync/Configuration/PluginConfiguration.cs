@@ -75,6 +75,12 @@ public bool SyncPerformerFavorites { get; set; } = false;
     /// <summary>Sync Jellyfin resume position (PlaybackPositionTicks) to Stash resume_time.</summary>
     public bool SyncResumePosition { get; set; } = false;
 
+    /// <summary>
+    /// Optional Jellyfin user GUID whose resume position is sent to Stash.
+    /// Stash stores a single shared resume position for each scene. Empty = all allowed users.
+    /// </summary>
+    public string ResumeUserId { get; set; } = string.Empty;
+
     /// <summary>Minimum delta (seconds) between resume updates.</summary>
     public int MinResumeDeltaSeconds { get; set; } = 20;
 

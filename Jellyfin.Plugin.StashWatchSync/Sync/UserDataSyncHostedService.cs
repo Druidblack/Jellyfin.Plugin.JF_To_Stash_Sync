@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Concurrent;
 using System.Globalization;
 using System.Threading;
@@ -127,7 +128,20 @@ private async Task HandlePlaybackProgressAsync(PlaybackProgressEventArgs e, bool
             return;
         }
 
-        // We only track duration if enabled; played sync uses the user-data hook.
+        // Resume sync uses UserDataSaved; the start event also reopens the resume window.
+        // Do not require play-duration sync for this step.
+        if (e.Item is Video startedVideo && isStart && cfg.SyncResumePosition)
+        {
+            var startUserId = TryGetUserId(e, cfg.ResumeUserId);
+            if (startUserId is not null && IsUserAllowed(startUserId.Value, cfg.OnlyUserIdsCsv))
+            {
+                var startKey = startUserId.Value.ToString("N", CultureInfo.InvariantCulture) + ":" + startedVideo.Id.ToString("N", CultureInfo.InvariantCulture);
+                var startState = _state.GetOrAdd(startKey, _ => new SyncState());
+                startState.LastResumeStopUtc = DateTime.MinValue;
+                startState.LastActivityUtc = nowUtc;
+            }
+        }
+
         if (!cfg.SyncPlayDuration)
         {
             return;
@@ -206,9 +220,10 @@ private async Task HandlePlaybackStoppedAsync(PlaybackStopEventArgs e)
             return;
         }
 
-        // We rely on watched-time tracking to decide whether a playback session is meaningful.
-        // This tracking is part of the play_duration feature.
-        if (!cfg.SyncPlayDuration)
+        // Resume position must work independently of play-duration tracking and its
+        // minimum-watched-time threshold. In Jellyfin 12 the stop event contains the
+        // authoritative final playback position; don't depend on a separate user-data save.
+        if (!cfg.SyncResumePosition && !cfg.SyncPlayDuration)
         {
             return;
         }
@@ -218,9 +233,10 @@ private async Task HandlePlaybackStoppedAsync(PlaybackStopEventArgs e)
             return;
         }
 
-        var userId = TryGetUserId(e);
+        var userId = TryGetUserId(e, cfg.SyncResumePosition ? cfg.ResumeUserId : null);
         if (userId is null)
         {
+            _logger.LogWarning("StashWatchSync: playback stopped but no user ID was found. itemId={ItemId}", item.Id);
             return;
         }
 
@@ -244,6 +260,21 @@ private async Task HandlePlaybackStoppedAsync(PlaybackStopEventArgs e)
         state.ItemName = item.Name ?? state.ItemName;
 
         state.LastActivityUtc = nowUtc;
+
+        // UserDataSaved handlers can finish after the stop event. Mark it immediately,
+        // so an older progress event cannot overwrite the final Stash resume position.
+        if (cfg.SyncResumePosition)
+        {
+            state.LastResumeStopUtc = nowUtc;
+            await SyncResumeOnPlaybackStopAsync(item, userId.Value, e, state, cfg).ConfigureAwait(false);
+        }
+
+        // The remaining logic is ONLY for play_duration and play_count. Neither its
+        // threshold nor its scene lookup must prevent writing the resume position.
+        if (!cfg.SyncPlayDuration)
+        {
+            return;
+        }
 
         var posTicks = e.PlaybackPositionTicks ?? 0L;
 
@@ -325,39 +356,142 @@ private async Task HandlePlaybackStoppedAsync(PlaybackStopEventArgs e)
 }
 
 
-private static Guid? TryGetUserId(object args)
+private static Guid? TryGetUserId(object args, string? preferredUserId = null)
 {
-    // Prefer args.UserId if it exists.
-    var userIdObj = GetPropertyValue(args, "UserId");
-    if (userIdObj is Guid g)
+    Guid? preferred = Guid.TryParse(preferredUserId, out var selected) && selected != Guid.Empty
+        ? selected : null;
+
+    // Jellyfin 12 playback events expose Users, not necessarily a top-level UserId.
+    // Avoid selecting an unrelated user from a multi-user playback session.
+    var users = GetPropertyValue(args, "Users");
+    if (users is IEnumerable entries)
+    {
+        Guid? first = null;
+        foreach (var entry in entries)
+        {
+            if (entry is null)
+            {
+                continue;
+            }
+
+            var id = GetGuid(entry) ?? GetGuid(GetPropertyValue(entry, "Id"));
+            if (id is null || id == Guid.Empty)
+            {
+                continue;
+            }
+
+            first ??= id;
+            if (preferred is not null && preferred == id)
+            {
+                return id;
+            }
+        }
+
+        if (first is not null)
+        {
+            return first;
+        }
+    }
+
+    return GetGuid(GetPropertyValue(args, "UserId"))
+        ?? GetGuid(GetPropertyValue(GetPropertyValue(args, "Session") ?? args, "UserId"));
+}
+
+private static Guid? GetGuid(object? value)
+{
+    if (value is Guid g && g != Guid.Empty)
     {
         return g;
     }
 
-    if (userIdObj is string s && Guid.TryParse(s, out var gs))
+    if (value is string s && Guid.TryParse(s, out var parsed) && parsed != Guid.Empty)
     {
-        return gs;
-    }
-
-    // Try args.Session.UserId.
-    var sessionObj = GetPropertyValue(args, "Session");
-    if (sessionObj is null)
-    {
-        return null;
-    }
-
-    var sessionUserIdObj = GetPropertyValue(sessionObj, "UserId");
-    if (sessionUserIdObj is Guid sg)
-    {
-        return sg;
-    }
-
-    if (sessionUserIdObj is string ss && Guid.TryParse(ss, out var sgs))
-    {
-        return sgs;
+        return parsed;
     }
 
     return null;
+}
+
+private async Task SyncResumeOnPlaybackStopAsync(
+    Video item,
+    Guid userId,
+    PlaybackStopEventArgs e,
+    SyncState state,
+    StashWatchSync.Configuration.PluginConfiguration cfg)
+{
+    if (!string.IsNullOrWhiteSpace(cfg.ResumeUserId))
+    {
+        if (!Guid.TryParse(cfg.ResumeUserId.Trim(), out var allowedId))
+        {
+            _logger.LogWarning("StashWatchSync: resume sync skipped: invalid ResumeUserId in settings");
+            return;
+        }
+
+        if (allowedId != userId)
+        {
+            _logger.LogDebug("StashWatchSync: resume sync skipped for user {UserId}: different user selected in settings", userId);
+            return;
+        }
+    }
+
+    var completed = TryGetBoolProperty(e, "PlayedToCompletion") == true;
+    var ticks = e.PlaybackPositionTicks;
+
+    // A real completion clears the resume point. Some playback clients report
+    // zero or null on an ordinary stop; those must NOT clear a valid Stash position.
+    if (!completed && (ticks is null || ticks <= 0))
+    {
+        _logger.LogWarning(
+            "StashWatchSync: resume sync skipped on stop: missing/zero playback position. itemId={ItemId} userId={UserId}",
+            item.Id, userId);
+        return;
+    }
+
+    double seconds = completed ? 0d : ticks!.Value / (double)TimeSpan.TicksPerSecond;
+    if (!double.IsFinite(seconds) || seconds < 0
+        || (item.RunTimeTicks is long runtime && runtime > 0 && seconds > runtime / (double)TimeSpan.TicksPerSecond + 1))
+    {
+        _logger.LogWarning("StashWatchSync: resume sync skipped: invalid stop position for item {ItemId}: {Seconds}", item.Id, seconds);
+        return;
+    }
+
+    await state.ResumeSyncGate.WaitAsync(ServiceToken).ConfigureAwait(false);
+    try
+    {
+        var sceneId = state.SceneId;
+        if (string.IsNullOrWhiteSpace(sceneId))
+        {
+            sceneId = await _stashClient.ResolveSceneIdAsync(item, ServiceToken).ConfigureAwait(false);
+            if (string.IsNullOrWhiteSpace(sceneId))
+            {
+                _logger.LogWarning("StashWatchSync: resume sync skipped: Stash scene not found for Jellyfin item {ItemId} path={Path}", item.Id, item.Path);
+                return;
+            }
+
+            state.SceneId = sceneId;
+        }
+
+        var ok = await _stashClient.SyncResumeAsync(sceneId!, seconds, ServiceToken, verify: true).ConfigureAwait(false);
+        if (ok)
+        {
+            state.LastResumeSeconds = seconds;
+            state.LastResumeSentUtc = DateTime.UtcNow;
+            state.LastPlayed = completed;
+            _logger.LogInformation(
+                "StashWatchSync: resume synced after playback stop. itemId={ItemId} sceneId={SceneId} userId={UserId} seconds={Seconds:F2} completed={Completed}",
+                item.Id, sceneId, userId, seconds, completed);
+        }
+        else
+        {
+            _logger.LogWarning(
+                "StashWatchSync: resume sync FAILED on playback stop. itemId={ItemId} sceneId={SceneId} userId={UserId} seconds={Seconds:F2}",
+                item.Id, sceneId, userId, seconds);
+        }
+    }
+    finally
+    {
+        state.ResumeSyncGate.Release();
+    }
 }
 
 private static object? GetPropertyValue(object obj, string name)
@@ -800,48 +934,123 @@ var ok = await _stashClient.SyncPlayedAsync(sceneId!, playCountDelta: 0, playedD
             return;
         }
 
-        // 2) Resume position.
+        // 2) Resume position: only the saved Jellyfin position is used, not elapsed watch time.
+        // Stash has a single scene-wide resume point, so administrators may select one source user.
         if (cfg.SyncResumePosition)
         {
-            // Don't push resume updates for played items.
+            // The final stop is synchronized directly from PlaybackStopEventArgs.
+            // A delayed UserDataSaved callback must not overwrite the new final point.
+            if (state.LastResumeStopUtc != DateTime.MinValue
+                && DateTime.UtcNow - state.LastResumeStopUtc < TimeSpan.FromSeconds(10))
+            {
+                return;
+            }
+
+            if (!string.IsNullOrWhiteSpace(cfg.ResumeUserId))
+            {
+                if (!Guid.TryParse(cfg.ResumeUserId.Trim(), out var resumeUserId))
+                {
+                    _logger.LogWarning("StashWatchSync: invalid ResumeUserId in plugin settings; resume sync skipped");
+                    return;
+                }
+
+                if (resumeUserId != userId)
+                {
+                    return;
+                }
+            }
+
+            // A finished/marked-watched item must not create a new continue-watching point.
+            // The existing Played handler above clears Stash's resume point to zero.
             if (ud.Played)
             {
                 return;
             }
 
-            double resumeSeconds = ud.PlaybackPositionTicks / (double)TimeSpan.TicksPerSecond;
-            if (resumeSeconds <= 0)
+            var resumeSeconds = ud.PlaybackPositionTicks / (double)TimeSpan.TicksPerSecond;
+            if (resumeSeconds < 0 || !double.IsFinite(resumeSeconds))
+            {
+                return;
+            }
+
+            // Reject impossible positions rather than writing incorrect state to Stash.
+            if (item.RunTimeTicks is long runTimeTicks && runTimeTicks > 0
+                && ud.PlaybackPositionTicks > runTimeTicks + TimeSpan.TicksPerSecond)
+            {
+                return;
+            }
+
+            // Jellyfin writes UserData with reason PlaybackFinished when a session stops.
+            // Always send that final saved position, even if the delta/time throttle has
+            // not yet expired. A zero position is sent only on stop, never on playback start.
+            var saveReason = GetPropertyValue(e, "SaveReason")?.ToString() ?? string.Empty;
+            var isFinalSave = string.Equals(saveReason, "PlaybackFinished", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(saveReason, "PlaybackStopped", StringComparison.OrdinalIgnoreCase);
+
+            if (resumeSeconds == 0 && !isFinalSave)
             {
                 return;
             }
 
             var now = DateTime.UtcNow;
-            var minInterval = TimeSpan.FromSeconds(Math.Max(0, cfg.MinResumeIntervalSeconds));
-            var minDelta = Math.Max(0, cfg.MinResumeDeltaSeconds);
-
-            if (now - state.LastResumeSentUtc < minInterval)
+            if (!isFinalSave)
             {
-                return;
+                var minInterval = TimeSpan.FromSeconds(Math.Clamp(cfg.MinResumeIntervalSeconds, 0, 86400));
+                var minDelta = Math.Clamp(cfg.MinResumeDeltaSeconds, 0, 86400);
+
+                if (now - state.LastResumeSentUtc < minInterval)
+                {
+                    return;
+                }
+
+                if (state.LastResumeSentUtc != DateTime.MinValue
+                    && Math.Abs(resumeSeconds - state.LastResumeSeconds) < minDelta)
+                {
+                    return;
+                }
             }
 
-            if (Math.Abs(resumeSeconds - state.LastResumeSeconds) < minDelta)
-            {
-                return;
-            }
-
-            var sceneId = await _stashClient.ResolveSceneIdAsync(item, ServiceToken).ConfigureAwait(false);
+            var sceneId = state.SceneId;
             if (string.IsNullOrWhiteSpace(sceneId))
             {
-                return;
+                sceneId = await _stashClient.ResolveSceneIdAsync(item, ServiceToken).ConfigureAwait(false);
+                if (string.IsNullOrWhiteSpace(sceneId))
+                {
+                    return;
+                }
+
+                state.SceneId = sceneId;
             }
 
-            var ok = await _stashClient.SyncResumeAsync(sceneId!, resumeSeconds, ServiceToken).ConfigureAwait(false);
-            if (ok)
+            await state.ResumeSyncGate.WaitAsync(ServiceToken).ConfigureAwait(false);
+            try
             {
-                state.LastResumeSeconds = resumeSeconds;
-                state.LastResumeSentUtc = now;
-                state.LastPlayed = false;
-                state.LastPlayCount = ud.PlayCount;
+                // This save may have waited for the final stop request to finish.
+                if (state.LastResumeStopUtc != DateTime.MinValue
+                    && DateTime.UtcNow - state.LastResumeStopUtc < TimeSpan.FromSeconds(10))
+                {
+                    return;
+                }
+
+                var ok = await _stashClient.SyncResumeAsync(sceneId!, resumeSeconds, ServiceToken).ConfigureAwait(false);
+                if (ok)
+                {
+                    state.LastResumeSeconds = resumeSeconds;
+                    state.LastResumeSentUtc = DateTime.UtcNow;
+                    state.LastPlayed = false;
+                    state.LastPlayCount = ud.PlayCount;
+                    _logger.LogInformation(
+                        "StashWatchSync: synced playback resume point from user data. sceneId={SceneId} userId={UserId} seconds={Seconds:F1} final={IsFinal}",
+                        sceneId, userId, resumeSeconds, isFinalSave);
+                }
+                else
+                {
+                    _logger.LogWarning("StashWatchSync: failed resume sync from user data. sceneId={SceneId} userId={UserId} seconds={Seconds:F1}", sceneId, userId, resumeSeconds);
+                }
+            }
+            finally
+            {
+                state.ResumeSyncGate.Release();
             }
         }
     }
@@ -876,6 +1085,8 @@ var ok = await _stashClient.SyncPlayedAsync(sceneId!, playCountDelta: 0, playedD
         public int LastPlayCount { get; set; }
         public double LastResumeSeconds { get; set; }
         public DateTime LastResumeSentUtc { get; set; } = DateTime.MinValue;
+        public DateTime LastResumeStopUtc { get; set; } = DateTime.MinValue;
+        public SemaphoreSlim ResumeSyncGate { get; } = new(1, 1);
 
         public bool? LastIsFavorite { get; set; } = null;
         public DateTime LastFavoriteSentUtc { get; set; } = DateTime.MinValue;

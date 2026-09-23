@@ -40,6 +40,12 @@ public sealed class StashClient
   }
 }";
 
+    // Stash's dedicated playback-activity mutation updates the player resume point
+    // without modifying scene metadata or adding any play_duration.
+    private const string SaveResumeActivityMutation = @"mutation sceneSaveActivity($id: ID!, $resume_time: Float!) {
+  sceneSaveActivity(id: $id, resume_time: $resume_time)
+}";
+
     private const string SceneUpdateMutation = @"mutation sceneUpdate($input: SceneUpdateInput!) {
   sceneUpdate(input: $input) {
     id
@@ -266,16 +272,39 @@ public sealed class StashClient
         return true;
     }
 
-    public Task<bool> SyncResumeAsync(string sceneId, double resumeSeconds, CancellationToken ct)
+    public async Task<bool> SyncResumeAsync(string sceneId, double resumeSeconds, CancellationToken ct, bool verify = false)
     {
         var cfg = Plugin.Instance?.Configuration;
-        if (cfg is null || !cfg.Enabled || !cfg.SyncResumePosition)
+        if (cfg is null || !cfg.Enabled || !cfg.SyncResumePosition
+            || string.IsNullOrWhiteSpace(sceneId) || !double.IsFinite(resumeSeconds) || resumeSeconds < 0)
         {
-            return Task.FromResult(false);
+            return false;
         }
 
-        // Only resume_time update.
-        return UpdateSceneAsync(sceneId, resumeTimeSeconds: resumeSeconds, playDurationSeconds: null, ct);
+        // sceneSaveActivity is the Stash API intended for playback progress. Sending
+        // only resume_time leaves play_duration and play_count untouched.
+        var response = await SendAsync<JObject>(SaveResumeActivityMutation,
+            new { id = sceneId, resume_time = resumeSeconds }, ct).ConfigureAwait(false);
+        if (response?.Errors is { Length: > 0 }
+            || response?.Data?["sceneSaveActivity"]?.Value<bool>() != true)
+        {
+            _logger.LogWarning("StashWatchSync: Stash rejected sceneSaveActivity. sceneId={SceneId} seconds={Seconds:F2}", sceneId, resumeSeconds);
+            return false;
+        }
+
+        if (verify)
+        {
+            var saved = await GetSceneActivityAsync(sceneId, ct).ConfigureAwait(false);
+            if (saved?.ResumeTime is not double actual || Math.Abs(actual - resumeSeconds) > 1.0)
+            {
+                _logger.LogWarning(
+                    "StashWatchSync: resume point verification failed. sceneId={SceneId} expected={Expected:F2} actual={Actual}",
+                    sceneId, resumeSeconds, saved?.ResumeTime);
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /// <summary>
