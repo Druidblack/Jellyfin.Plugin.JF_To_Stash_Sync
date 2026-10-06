@@ -7,7 +7,7 @@ using MediaBrowser.Model.Serialization;
 
 [assembly: CLSCompliant(false)]
 
-namespace StashWatchSync;
+namespace JFToStashSync;
 
 public sealed class Plugin : BasePlugin<Configuration.PluginConfiguration>, IHasWebPages
 {
@@ -20,6 +20,13 @@ public sealed class Plugin : BasePlugin<Configuration.PluginConfiguration>, IHas
     public Plugin(IApplicationPaths applicationPaths, IXmlSerializer xmlSerializer)
         : base(applicationPaths, xmlSerializer)
     {
+        // Migrate settings from the pre-rename assembly configuration file before
+        // BasePlugin lazily loads Configuration from the new file name.
+        JFToStashSync.Configuration.LegacyConfigurationMigrator.TryMigrate(
+            applicationPaths,
+            xmlSerializer,
+            ConfigurationFilePath);
+
         Instance = this;
     }
 

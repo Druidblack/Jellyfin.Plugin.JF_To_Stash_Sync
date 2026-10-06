@@ -1,17 +1,22 @@
 using System;
 using System.Collections;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Globalization;
+using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
+using MediaBrowser.Controller.Persistence;
 using MediaBrowser.Controller.Session;
+using MediaBrowser.Model.Entities;
+using Jellyfin.Data.Enums;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using StashWatchSync.Services;
+using JFToStashSync.Services;
 
-namespace StashWatchSync.Sync;
+namespace JFToStashSync.Sync;
 
 /// <summary>
 /// Background service that listens to Jellyfin user data changes and syncs play state to Stash.
@@ -22,6 +27,10 @@ public sealed class UserDataSyncHostedService : IHostedService, IDisposable
     private readonly ILogger<UserDataSyncHostedService> _logger;
     private readonly StashClient _stashClient;
     private readonly ISessionManager _sessionManager;
+    private readonly JellyfinUrlSyncService _jellyfinUrlSyncService;
+    private readonly IItemPersistenceService _itemPersistenceService;
+    private readonly ILibraryManager _libraryManager;
+    private readonly IUserManager _userManager;
 
     private readonly ConcurrentDictionary<string, SyncState> _state = new();
 
@@ -32,11 +41,19 @@ public sealed class UserDataSyncHostedService : IHostedService, IDisposable
         IUserDataManager userDataManager,
         ISessionManager sessionManager,
         StashClient stashClient,
+        JellyfinUrlSyncService jellyfinUrlSyncService,
+        IItemPersistenceService itemPersistenceService,
+        ILibraryManager libraryManager,
+        IUserManager userManager,
         ILogger<UserDataSyncHostedService> logger)
     {
         _userDataManager = userDataManager;
         _sessionManager = sessionManager;
         _stashClient = stashClient;
+        _jellyfinUrlSyncService = jellyfinUrlSyncService;
+        _itemPersistenceService = itemPersistenceService;
+        _libraryManager = libraryManager;
+        _userManager = userManager;
         _logger = logger;
     }
 
@@ -46,7 +63,7 @@ public sealed class UserDataSyncHostedService : IHostedService, IDisposable
         _sessionManager.PlaybackStart += OnPlaybackStart;
         _sessionManager.PlaybackProgress += OnPlaybackProgress;
         _sessionManager.PlaybackStopped += OnPlaybackStopped;
-        _logger.LogInformation("StashWatchSync: subscribed to UserDataSaved and playback events");
+        _logger.LogInformation("JFToStashSync: subscribed to UserDataSaved and playback events");
 
         _cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         _flushLoopTask = Task.Run(() => FlushLoopAsync(_cts.Token), CancellationToken.None);
@@ -60,7 +77,7 @@ public sealed class UserDataSyncHostedService : IHostedService, IDisposable
         _sessionManager.PlaybackStart -= OnPlaybackStart;
         _sessionManager.PlaybackProgress -= OnPlaybackProgress;
         _sessionManager.PlaybackStopped -= OnPlaybackStopped;
-        _logger.LogInformation("StashWatchSync: unsubscribed from UserDataSaved and playback events");
+        _logger.LogInformation("JFToStashSync: unsubscribed from UserDataSaved and playback events");
 
         try
         {
@@ -83,7 +100,7 @@ public sealed class UserDataSyncHostedService : IHostedService, IDisposable
             }
             catch (Exception ex)
             {
-                _logger.LogWarning(ex, "StashWatchSync: flush loop stopped with error");
+                _logger.LogWarning(ex, "JFToStashSync: flush loop stopped with error");
             }
         }
     }
@@ -199,7 +216,7 @@ private async Task HandlePlaybackProgressAsync(PlaybackProgressEventArgs e, bool
     }
     catch (Exception ex)
     {
-        _logger.LogDebug(ex, "StashWatchSync: playback progress handler error");
+        _logger.LogDebug(ex, "JFToStashSync: playback progress handler error");
     }
 }
 
@@ -236,7 +253,7 @@ private async Task HandlePlaybackStoppedAsync(PlaybackStopEventArgs e)
         var userId = TryGetUserId(e, cfg.SyncResumePosition ? cfg.ResumeUserId : null);
         if (userId is null)
         {
-            _logger.LogWarning("StashWatchSync: playback stopped but no user ID was found. itemId={ItemId}", item.Id);
+            _logger.LogWarning("JFToStashSync: playback stopped but no user ID was found. itemId={ItemId}", item.Id);
             return;
         }
 
@@ -289,16 +306,9 @@ private async Task HandlePlaybackStoppedAsync(PlaybackStopEventArgs e)
             return;
         }
 
-        // Resolve scene id if needed.
-        var sceneId = state.SceneId;
-        if (string.IsNullOrWhiteSpace(sceneId))
-        {
-            sceneId = await _stashClient.ResolveSceneIdAsync(state.ProviderId, state.ItemPath, ServiceToken).ConfigureAwait(false);
-            if (!string.IsNullOrWhiteSpace(sceneId))
-            {
-                state.SceneId = sceneId;
-            }
-        }
+        // Resolve scene id if needed. Use the common resolver so a successful exact
+        // fallback match is promoted to a persistent Jellyfin Stash provider id.
+        var sceneId = await ResolveSceneForStateAsync(item, state, ServiceToken).ConfigureAwait(false);
 
         if (string.IsNullOrWhiteSpace(sceneId))
         {
@@ -312,11 +322,11 @@ private async Task HandlePlaybackStoppedAsync(PlaybackStopEventArgs e)
             var incOk = await _stashClient.IncrementPlayCountOnlyAsync(sceneId, 1, ServiceToken).ConfigureAwait(false);
             if (!incOk)
             {
-                _logger.LogWarning("StashWatchSync: failed to increment play count on playback stop. sceneId={SceneId}", sceneId);
+                _logger.LogWarning("JFToStashSync: failed to increment play count on playback stop. sceneId={SceneId}", sceneId);
             }
             else
             {
-                _logger.LogInformation("StashWatchSync: incremented play count on playback stop. sceneId={SceneId}", sceneId);
+                _logger.LogInformation("JFToStashSync: incremented play count on playback stop. sceneId={SceneId}", sceneId);
             }
         }
 
@@ -332,7 +342,7 @@ private async Task HandlePlaybackStoppedAsync(PlaybackStopEventArgs e)
                     if (ok)
                     {
                         _logger.LogInformation(
-                            "StashWatchSync: flushed in-progress play_duration to Stash on playback stop. sceneId={SceneId} seconds={Seconds:F1}",
+                            "JFToStashSync: flushed in-progress play_duration to Stash on playback stop. sceneId={SceneId} seconds={Seconds:F1}",
                             sceneId, pendingSeconds);
 
                         state.SessionWatchedSeconds = 0;
@@ -351,7 +361,7 @@ private async Task HandlePlaybackStoppedAsync(PlaybackStopEventArgs e)
     }
     catch (Exception ex)
     {
-        _logger.LogDebug(ex, "StashWatchSync: playback stopped handler error");
+        _logger.LogDebug(ex, "JFToStashSync: playback stopped handler error");
     }
 }
 
@@ -412,24 +422,304 @@ private static Guid? GetGuid(object? value)
     return null;
 }
 
+private async Task<string?> ResolveSceneForStateAsync(Video item, SyncState state, CancellationToken ct)
+{
+    // Keep the best identity data we have. Some Jellyfin UserDataSaved events can
+    // expose a partially populated item, so never replace a previously cached path/name
+    // with an empty value.
+    var hasPersistentProviderId = false;
+    if (item.ProviderIds is not null
+        && item.ProviderIds.TryGetValue("Stash", out var providerId)
+        && !string.IsNullOrWhiteSpace(providerId))
+    {
+        hasPersistentProviderId = true;
+        state.ProviderId = providerId;
+        state.SceneId ??= providerId;
+    }
+
+    if (!string.IsNullOrWhiteSpace(item.Path))
+    {
+        state.ItemPath = item.Path;
+    }
+
+    if (!string.IsNullOrWhiteSpace(item.Name))
+    {
+        state.ItemName = item.Name;
+    }
+
+    // A cached exact match is sufficient for activity sync, but do not let the cache
+    // hide a manually removed persistent binding. Repair it asynchronously after the
+    // current user-data activity has gone quiet.
+    if (!string.IsNullOrWhiteSpace(state.SceneId))
+    {
+        // Repair a missing Provider ID immediately after quiet time. Also periodically
+        // re-run the idempotent URL upsert so a manually removed Stash URL can heal
+        // without requiring a full scheduled batch task.
+        if (!hasPersistentProviderId
+            || state.LastIdentityRepairUtc == DateTime.MinValue
+            || DateTime.UtcNow - state.LastIdentityRepairUtc >= TimeSpan.FromMinutes(15))
+        {
+            ScheduleIdentityRepair(item.Id, state, state.SceneId!);
+        }
+
+        return state.SceneId;
+    }
+
+    var resolved = await _stashClient
+        .ResolveSceneIdAsync(state.ProviderId, state.ItemPath, ct)
+        .ConfigureAwait(false);
+
+    if (!string.IsNullOrWhiteSpace(resolved))
+    {
+        state.SceneId = resolved;
+        _logger.LogDebug(
+            "JFToStashSync: cached resolved Stash scene. itemId={ItemId} sceneId={SceneId} path={Path}",
+            item.Id,
+            resolved,
+            state.ItemPath ?? string.Empty);
+
+        // Do NOT persist ProviderIds from inside a Favorite/UserDataSaved callback. Jellyfin
+        // has known races where item/metadata updates can destabilize user favorite state.
+        // Cache the exact result immediately, then promote it after a short quiet period.
+        ScheduleIdentityRepair(item.Id, state, resolved);
+    }
+
+    return resolved;
+}
+
+private void ScheduleIdentityRepair(Guid itemId, SyncState state, string sceneId)
+{
+    if (string.IsNullOrWhiteSpace(sceneId) || ServiceToken.IsCancellationRequested)
+    {
+        return;
+    }
+
+    CancellationTokenSource repairCts;
+    lock (state.IdentityRepairLock)
+    {
+        try
+        {
+            state.IdentityRepairCts?.Cancel();
+            state.IdentityRepairCts?.Dispose();
+        }
+        catch
+        {
+            // Best effort cancellation of an older delayed repair.
+        }
+
+        repairCts = CancellationTokenSource.CreateLinkedTokenSource(ServiceToken);
+        state.IdentityRepairCts = repairCts;
+        state.PendingIdentitySceneId = sceneId;
+    }
+
+    _ = RunIdentityRepairAsync(itemId, state, sceneId, repairCts);
+}
+
+private async Task RunIdentityRepairAsync(Guid itemId, SyncState state, string sceneId, CancellationTokenSource repairCts)
+{
+    try
+    {
+        // Wait until the Favorite/UserDataSaved burst has settled. Repeated activity
+        // reschedules this delay, so metadata persistence never runs inside the click race.
+        await Task.Delay(TimeSpan.FromSeconds(5), repairCts.Token).ConfigureAwait(false);
+
+        var freshItem = _libraryManager.GetItemById(itemId) as Video;
+        if (freshItem is null)
+        {
+            return;
+        }
+
+        await PromoteResolvedFallbackAsync(freshItem, state, sceneId, repairCts.Token).ConfigureAwait(false);
+    }
+    catch (OperationCanceledException) when (repairCts.IsCancellationRequested)
+    {
+        // A newer activity event rescheduled the repair, or the plugin is stopping.
+    }
+    catch (Exception ex)
+    {
+        _logger.LogWarning(ex,
+            "JFToStashSync: delayed identity repair failed. itemId={ItemId} sceneId={SceneId}",
+            itemId, sceneId);
+    }
+    finally
+    {
+        lock (state.IdentityRepairLock)
+        {
+            if (ReferenceEquals(state.IdentityRepairCts, repairCts))
+            {
+                state.IdentityRepairCts = null;
+                state.PendingIdentitySceneId = null;
+            }
+        }
+
+        repairCts.Dispose();
+    }
+}
+
+private async Task PromoteResolvedFallbackAsync(Video item, SyncState state, string sceneId, CancellationToken ct)
+{
+    await state.IdentityPromotionGate.WaitAsync(ct).ConfigureAwait(false);
+    try
+    {
+        bool alreadyPersisted = item.ProviderIds is not null
+            && item.ProviderIds.TryGetValue("Stash", out var existingProviderId)
+            && string.Equals(existingProviderId, sceneId, StringComparison.Ordinal);
+
+        var providerWasWritten = false;
+        if (!alreadyPersisted)
+        {
+            // Quarantine UserDataSaved events briefly around our own item persistence. This is
+            // defensive against Jellyfin's known favorite/metadata races and, importantly,
+            // prevents a synthetic False/True burst from being reflected back into Stash.
+            state.IdentityPromotionSuppressFavoriteUntilUtc = DateTime.UtcNow.AddSeconds(4);
+            item.ProviderIds ??= new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            item.ProviderIds["Stash"] = sceneId;
+
+            try
+            {
+                _itemPersistenceService.SaveItems(new BaseItem[] { item }, ct);
+                providerWasWritten = true;
+                state.ProviderId = sceneId;
+                state.SceneId = sceneId;
+                _logger.LogInformation(
+                    "JFToStashSync: repaired/persisted Jellyfin Stash provider id after quiet period. itemId={ItemId} sceneId={SceneId} name={Name}",
+                    item.Id,
+                    sceneId,
+                    item.Name ?? string.Empty);
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(
+                    ex,
+                    "JFToStashSync: Stash scene match is cached but provider id could not be persisted to Jellyfin. itemId={ItemId} sceneId={SceneId}",
+                    item.Id,
+                    sceneId);
+            }
+        }
+        else
+        {
+            state.ProviderId = sceneId;
+            state.SceneId = sceneId;
+        }
+
+        // Upsert is idempotent, so a cached match can also self-heal a manually deleted
+        // Jellyfin URL in Stash whenever identity repair is requested.
+        var cfg = Plugin.Instance?.Configuration;
+        if (cfg is not null && !string.IsNullOrWhiteSpace(cfg.JellyfinBaseUrl))
+        {
+            try
+            {
+                var result = await _jellyfinUrlSyncService.SyncVideoAsync(item, ct).ConfigureAwait(false);
+                if (result.Success)
+                {
+                    state.JellyfinUrlPromoted = true;
+                    state.LastIdentityRepairUtc = DateTime.UtcNow;
+                    _logger.LogInformation(
+                        "JFToStashSync: verified/repaired Jellyfin URL for cached Stash match. itemId={ItemId} sceneId={SceneId} changed={Changed}",
+                        item.Id,
+                        sceneId,
+                        result.Changed);
+                }
+                else
+                {
+                    _logger.LogWarning(
+                        "JFToStashSync: cached Stash match exists but Jellyfin URL could not be written to Stash. itemId={ItemId} sceneId={SceneId} reason={Reason}",
+                        item.Id,
+                        sceneId,
+                        result.Message);
+                }
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(
+                    ex,
+                    "JFToStashSync: cached Stash match exists but Jellyfin URL repair failed. itemId={ItemId} sceneId={SceneId}",
+                    item.Id,
+                    sceneId);
+            }
+        }
+
+        // If Jellyfin changed the user's favorite flag while the item identity was being
+        // persisted, restore the stable state that the user established before the quiet
+        // period. Our own SaveUserData event is covered by the quarantine above.
+        if (providerWasWritten && state.LastIsFavorite.HasValue && state.LastUserId != Guid.Empty)
+        {
+            try
+            {
+                await Task.Delay(TimeSpan.FromMilliseconds(500), ct).ConfigureAwait(false);
+                var user = _userManager.GetUserById(state.LastUserId);
+                if (user is not null)
+                {
+                    var currentUserData = _userDataManager.GetUserData(user, item);
+                    if (currentUserData is not null
+                        && currentUserData.IsFavorite != state.LastIsFavorite.Value)
+                    {
+                        var desiredFavorite = state.LastIsFavorite.Value;
+                        currentUserData.IsFavorite = desiredFavorite;
+                        state.IdentityPromotionSuppressFavoriteUntilUtc = DateTime.UtcNow.AddSeconds(3);
+                        _userDataManager.SaveUserData(
+                            user,
+                            item,
+                            currentUserData,
+                            UserDataSaveReason.UpdateUserRating,
+                            ct);
+
+                        _logger.LogWarning(
+                            "JFToStashSync: restored Jellyfin favorite state after identity repair race. itemId={ItemId} sceneId={SceneId} favorite={Favorite} userId={UserId}",
+                            item.Id, sceneId, desiredFavorite, state.LastUserId);
+                    }
+                }
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(
+                    ex,
+                    "JFToStashSync: could not verify Jellyfin favorite state after identity repair. itemId={ItemId} sceneId={SceneId}",
+                    item.Id, sceneId);
+            }
+        }
+
+        if (providerWasWritten)
+        {
+            state.IdentityPromotionSuppressFavoriteUntilUtc = DateTime.UtcNow.AddSeconds(3);
+        }
+    }
+    finally
+    {
+        state.IdentityPromotionGate.Release();
+    }
+}
+
 private async Task SyncResumeOnPlaybackStopAsync(
     Video item,
     Guid userId,
     PlaybackStopEventArgs e,
     SyncState state,
-    StashWatchSync.Configuration.PluginConfiguration cfg)
+    JFToStashSync.Configuration.PluginConfiguration cfg)
 {
     if (!string.IsNullOrWhiteSpace(cfg.ResumeUserId))
     {
         if (!Guid.TryParse(cfg.ResumeUserId.Trim(), out var allowedId))
         {
-            _logger.LogWarning("StashWatchSync: resume sync skipped: invalid ResumeUserId in settings");
+            _logger.LogWarning("JFToStashSync: resume sync skipped: invalid ResumeUserId in settings");
             return;
         }
 
         if (allowedId != userId)
         {
-            _logger.LogDebug("StashWatchSync: resume sync skipped for user {UserId}: different user selected in settings", userId);
+            _logger.LogDebug("JFToStashSync: resume sync skipped for user {UserId}: different user selected in settings", userId);
             return;
         }
     }
@@ -442,7 +732,7 @@ private async Task SyncResumeOnPlaybackStopAsync(
     if (!completed && (ticks is null || ticks <= 0))
     {
         _logger.LogWarning(
-            "StashWatchSync: resume sync skipped on stop: missing/zero playback position. itemId={ItemId} userId={UserId}",
+            "JFToStashSync: resume sync skipped on stop: missing/zero playback position. itemId={ItemId} userId={UserId}",
             item.Id, userId);
         return;
     }
@@ -451,24 +741,21 @@ private async Task SyncResumeOnPlaybackStopAsync(
     if (!double.IsFinite(seconds) || seconds < 0
         || (item.RunTimeTicks is long runtime && runtime > 0 && seconds > runtime / (double)TimeSpan.TicksPerSecond + 1))
     {
-        _logger.LogWarning("StashWatchSync: resume sync skipped: invalid stop position for item {ItemId}: {Seconds}", item.Id, seconds);
+        _logger.LogWarning("JFToStashSync: resume sync skipped: invalid stop position for item {ItemId}: {Seconds}", item.Id, seconds);
         return;
     }
 
     await state.ResumeSyncGate.WaitAsync(ServiceToken).ConfigureAwait(false);
     try
     {
-        var sceneId = state.SceneId;
+        var sceneId = await ResolveSceneForStateAsync(item, state, ServiceToken).ConfigureAwait(false);
         if (string.IsNullOrWhiteSpace(sceneId))
         {
-            sceneId = await _stashClient.ResolveSceneIdAsync(item, ServiceToken).ConfigureAwait(false);
-            if (string.IsNullOrWhiteSpace(sceneId))
-            {
-                _logger.LogWarning("StashWatchSync: resume sync skipped: Stash scene not found for Jellyfin item {ItemId} path={Path}", item.Id, item.Path);
-                return;
-            }
-
-            state.SceneId = sceneId;
+            _logger.LogWarning(
+                "JFToStashSync: resume sync skipped: Stash scene not found for Jellyfin item {ItemId} path={Path}",
+                item.Id,
+                state.ItemPath ?? item.Path);
+            return;
         }
 
         var ok = await _stashClient.SyncResumeAsync(sceneId!, seconds, ServiceToken, verify: true).ConfigureAwait(false);
@@ -478,13 +765,13 @@ private async Task SyncResumeOnPlaybackStopAsync(
             state.LastResumeSentUtc = DateTime.UtcNow;
             state.LastPlayed = completed;
             _logger.LogInformation(
-                "StashWatchSync: resume synced after playback stop. itemId={ItemId} sceneId={SceneId} userId={UserId} seconds={Seconds:F2} completed={Completed}",
+                "JFToStashSync: resume synced after playback stop. itemId={ItemId} sceneId={SceneId} userId={UserId} seconds={Seconds:F2} completed={Completed}",
                 item.Id, sceneId, userId, seconds, completed);
         }
         else
         {
             _logger.LogWarning(
-                "StashWatchSync: resume sync FAILED on playback stop. itemId={ItemId} sceneId={SceneId} userId={UserId} seconds={Seconds:F2}",
+                "JFToStashSync: resume sync FAILED on playback stop. itemId={ItemId} sceneId={SceneId} userId={UserId} seconds={Seconds:F2}",
                 item.Id, sceneId, userId, seconds);
         }
     }
@@ -645,7 +932,7 @@ private static bool? TryGetBoolProperty(object obj, params string[] names)
             }
             catch (Exception ex)
             {
-                _logger.LogWarning(ex, "StashWatchSync: flush loop error");
+                _logger.LogWarning(ex, "JFToStashSync: flush loop error");
             }
 
             var cfg2 = Plugin.Instance?.Configuration;
@@ -679,7 +966,7 @@ private static bool? TryGetBoolProperty(object obj, params string[] names)
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "StashWatchSync: user-data handler error");
+            _logger.LogWarning(ex, "JFToStashSync: user-data handler error");
         }
     }
 
@@ -746,7 +1033,7 @@ private static bool? TryGetBoolProperty(object obj, params string[] names)
             if (ok)
             {
                 _logger.LogInformation(
-                    "StashWatchSync: synced performer favorite to Stash. performerId={PerformerId} favorite={Favorite} userId={UserId} itemId={ItemId} name={Name}",
+                    "JFToStashSync: synced performer favorite to Stash. performerId={PerformerId} favorite={Favorite} userId={UserId} itemId={ItemId} name={Name}",
                     stashPerformerId,
                     isFavorite,
                     userId,
@@ -756,7 +1043,7 @@ private static bool? TryGetBoolProperty(object obj, params string[] names)
             else
             {
                 _logger.LogWarning(
-                    "StashWatchSync: failed to sync performer favorite to Stash. performerId={PerformerId} favorite={Favorite} userId={UserId} itemId={ItemId} name={Name}",
+                    "JFToStashSync: failed to sync performer favorite to Stash. performerId={PerformerId} favorite={Favorite} userId={UserId} itemId={ItemId} name={Name}",
                     stashPerformerId,
                     isFavorite,
                     userId,
@@ -780,6 +1067,7 @@ private static bool? TryGetBoolProperty(object obj, params string[] names)
 
         string key = userId.ToString("N", CultureInfo.InvariantCulture) + ":" + item.Id.ToString("N", CultureInfo.InvariantCulture);
         var state = _state.GetOrAdd(key, _ => new SyncState());
+        state.LastUserId = userId;
 
         // Cache identifying info for background flush.
         if (item.ProviderIds is not null && item.ProviderIds.TryGetValue("Stash", out var stashProviderId) && !string.IsNullOrWhiteSpace(stashProviderId))
@@ -788,8 +1076,15 @@ private static bool? TryGetBoolProperty(object obj, params string[] names)
             state.SceneId ??= stashProviderId;
         }
 
-        state.ItemPath = itemPath;
-        state.ItemName = itemName;
+        if (!string.IsNullOrWhiteSpace(itemPath))
+        {
+            state.ItemPath = itemPath;
+        }
+
+        if (!string.IsNullOrWhiteSpace(itemName))
+        {
+            state.ItemName = itemName;
+        }
 
         state.LastActivityUtc = nowUtc;
 
@@ -806,11 +1101,7 @@ private static bool? TryGetBoolProperty(object obj, params string[] names)
                 && (state.LastSceneResolveAttemptUtc == DateTime.MinValue || (nowUtc - state.LastSceneResolveAttemptUtc).TotalSeconds >= 30))
             {
                 state.LastSceneResolveAttemptUtc = nowUtc;
-                var resolved = await _stashClient.ResolveSceneIdAsync(item, ServiceToken).ConfigureAwait(false);
-                if (!string.IsNullOrWhiteSpace(resolved))
-                {
-                    state.SceneId = resolved;
-                }
+                await ResolveSceneForStateAsync(item, state, ServiceToken).ConfigureAwait(false);
             }
         }
 
@@ -820,42 +1111,149 @@ private static bool? TryGetBoolProperty(object obj, params string[] names)
             var isFavorite = TryGetBoolProperty(ud, "IsFavorite", "IsFavourite");
             if (isFavorite is not null)
             {
-                var saveReason = GetPropertyValue(e, "SaveReason")?.ToString() ?? string.Empty;
-                var reasonLooksLikeFavorite = saveReason.IndexOf("favorite", StringComparison.OrdinalIgnoreCase) >= 0
-                    || saveReason.IndexOf("favour", StringComparison.OrdinalIgnoreCase) >= 0;
+                // Jellyfin 12 uses UserDataSaveReason.UpdateUserRating for BOTH MarkFavorite
+                // and UnmarkFavorite. There is no dedicated Favorite save reason. Treat this
+                // reason as an explicit signal, including when IsFavorite=false and this
+                // plugin has no in-memory baseline yet (e.g. after restart).
+                var explicitUserRatingChange = e.SaveReason == UserDataSaveReason.UpdateUserRating;
 
-                // Avoid accidental overwrites: if we have no baseline yet, only act on Favorite=true (safe)
-                // or when the save reason explicitly looks like a favorite toggle.
-                var shouldConsider = reasonLooksLikeFavorite || isFavorite.Value || state.LastIsFavorite is not null;
-
-                if (shouldConsider && (state.LastIsFavorite is null || state.LastIsFavorite.Value != isFavorite.Value || reasonLooksLikeFavorite))
+                // Events produced while we are persisting the newly discovered identity are
+                // quarantined before the generic storm detector. They are a known side effect
+                // window, not user intent, and must not overwrite LastIsFavorite.
+                if (explicitUserRatingChange
+                    && state.IdentityPromotionSuppressFavoriteUntilUtc > nowUtc)
                 {
-                    var sceneIdForFav = await _stashClient.ResolveSceneIdAsync(item, ServiceToken).ConfigureAwait(false);
-                    var rating = isFavorite.Value ? 5 : 0;
+                    _logger.LogDebug(
+                        "JFToStashSync: ignoring user-rating/favorite event during identity-promotion quarantine. favorite={Favorite} userId={UserId} itemId={ItemId}",
+                        isFavorite.Value, userId, item.Id);
+                    return;
+                }
 
-                    if (!string.IsNullOrWhiteSpace(sceneIdForFav))
+                // Safety valve: an item/user must never be allowed to alternate Favorite ON/OFF
+                // indefinitely and hammer Stash. This is intentionally only a circuit breaker for
+                // pathological bursts; normal clicks are unaffected.
+                if (explicitUserRatingChange
+                    && IsFavoriteStormSuppressed(state, isFavorite.Value, nowUtc, out var circuitJustOpened))
+                {
+                    // Keep the last successfully synchronized stable value. Do not let a
+                    // pathological alternating burst redefine the desired state.
+                    if (circuitJustOpened)
                     {
-                        var ok = await _stashClient.SetSceneRatingAsync(sceneIdForFav!, rating, ServiceToken).ConfigureAwait(false);
-                        if (ok)
+                        _logger.LogWarning(
+                            "JFToStashSync: detected an abnormal favorite state loop; temporarily suppressing Stash rating writes. userId={UserId} itemId={ItemId} name={Name}",
+                            userId,
+                            item.Id,
+                            itemName);
+                    }
+
+                    return;
+                }
+
+                if (explicitUserRatingChange)
+                {
+                    _logger.LogInformation(
+                        "JFToStashSync: received Jellyfin user-rating/favorite event. favorite={Favorite} saveReason={SaveReason} userId={UserId} itemId={ItemId} name={Name}",
+                        isFavorite.Value,
+                        e.SaveReason,
+                        userId,
+                        item.Id,
+                        itemName);
+                }
+
+                // Serialize Favorite changes for this user/item so ON and OFF cannot overlap
+                // and finish out of order.
+                var favoriteTotalTimer = Stopwatch.StartNew();
+                var favoriteGateTimer = Stopwatch.StartNew();
+                await state.FavoriteSyncGate.WaitAsync(ServiceToken).ConfigureAwait(false);
+                favoriteGateTimer.Stop();
+                var resolveElapsedMs = 0L;
+                var stashElapsedMs = 0L;
+                try
+                {
+                    var changedFromKnownState = state.LastIsFavorite is not null
+                        && state.LastIsFavorite.Value != isFavorite.Value;
+                    var safeInitialWrite = state.LastIsFavorite is null
+                        && (isFavorite.Value || explicitUserRatingChange);
+                    var shouldWrite = changedFromKnownState || safeInitialWrite;
+
+                    if (shouldWrite)
+                    {
+                        var resolveTimer = Stopwatch.StartNew();
+
+                        // Favorite synchronization is Stash-ID-only. It must not trigger metadata
+                        // refresh or filename/path fallback. If the item has no persistent Stash ID,
+                        // skip the Stash rating write and let the manual search button establish it.
+                        string? sceneIdForFav = null;
+                        if (item.ProviderIds is not null
+                            && item.ProviderIds.TryGetValue("Stash", out var favoriteStashId)
+                            && !string.IsNullOrWhiteSpace(favoriteStashId))
                         {
-                            _logger.LogInformation(
-                                "StashWatchSync: updated scene rating from favorite. sceneId={SceneId} rating={Rating} userId={UserId} itemId={ItemId} name={Name}",
-                                sceneIdForFav, rating, userId, item.Id, itemName);
+                            sceneIdForFav = favoriteStashId;
+                            state.ProviderId = favoriteStashId;
+                            state.SceneId = favoriteStashId;
+                        }
+
+                        resolveTimer.Stop();
+                        resolveElapsedMs = resolveTimer.ElapsedMilliseconds;
+                        var rating = isFavorite.Value ? 5 : 0;
+
+                        if (!string.IsNullOrWhiteSpace(sceneIdForFav))
+                        {
+                            var stashTimer = Stopwatch.StartNew();
+                            var ok = await _stashClient.SetSceneRatingAsync(sceneIdForFav!, rating, ServiceToken).ConfigureAwait(false);
+                            stashTimer.Stop();
+                            stashElapsedMs = stashTimer.ElapsedMilliseconds;
+                            if (ok)
+                            {
+                                state.LastIsFavorite = isFavorite.Value;
+                                state.LastFavoriteSentUtc = DateTime.UtcNow;
+                                _logger.LogInformation(
+                                    "JFToStashSync: updated scene rating from favorite. sceneId={SceneId} rating={Rating} favorite={Favorite} saveReason={SaveReason} userId={UserId} itemId={ItemId} name={Name}",
+                                    sceneIdForFav, rating, isFavorite.Value, e.SaveReason, userId, item.Id, itemName);
+                            }
+                            else
+                            {
+                                _logger.LogWarning(
+                                    "JFToStashSync: failed to update scene rating from favorite. sceneId={SceneId} rating={Rating} favorite={Favorite} saveReason={SaveReason} userId={UserId} itemId={ItemId} name={Name}",
+                                    sceneIdForFav, rating, isFavorite.Value, e.SaveReason, userId, item.Id, itemName);
+                            }
                         }
                         else
                         {
                             _logger.LogWarning(
-                                "StashWatchSync: failed to update scene rating from favorite. sceneId={SceneId} rating={Rating} userId={UserId} itemId={ItemId} name={Name}",
-                                sceneIdForFav, rating, userId, item.Id, itemName);
+                                "JFToStashSync: favorite sync skipped because the Jellyfin item has no Stash ID. favorite={Favorite} saveReason={SaveReason} userId={UserId} itemId={ItemId} name={Name} path={Path}",
+                                isFavorite.Value,
+                                e.SaveReason,
+                                userId,
+                                item.Id,
+                                itemName,
+                                state.ItemPath ?? itemPath);
                         }
                     }
-
-                    state.LastIsFavorite = isFavorite.Value;
+                    else if (state.LastIsFavorite is null)
+                    {
+                        // Non-rating saves may carry IsFavorite=false. Record that only as a
+                        // baseline; don't write a zero rating unless Jellyfin explicitly saved
+                        // user rating/favorite data.
+                        state.LastIsFavorite = isFavorite.Value;
+                    }
                 }
-                else if (state.LastIsFavorite is null)
+                finally
                 {
-                    // Establish baseline without writing to Stash.
-                    state.LastIsFavorite = isFavorite.Value;
+                    state.FavoriteSyncGate.Release();
+                    favoriteTotalTimer.Stop();
+                    if (favoriteTotalTimer.ElapsedMilliseconds >= 2000)
+                    {
+                        _logger.LogWarning(
+                            "JFToStashSync: slow favorite sync. totalMs={TotalMs} gateWaitMs={GateWaitMs} resolveMs={ResolveMs} stashWriteMs={StashWriteMs} userId={UserId} itemId={ItemId} favorite={Favorite}",
+                            favoriteTotalTimer.ElapsedMilliseconds,
+                            favoriteGateTimer.ElapsedMilliseconds,
+                            resolveElapsedMs,
+                            stashElapsedMs,
+                            userId,
+                            item.Id,
+                            isFavorite.Value);
+                    }
                 }
             }
         }
@@ -864,7 +1262,7 @@ private static bool? TryGetBoolProperty(object obj, params string[] names)
         if (ud.Played)
         {
             _logger.LogDebug(
-                "StashWatchSync: Played=true. userId={UserId} itemId={ItemId} name={Name} playCount={PlayCount} path={Path}",
+                "JFToStashSync: Played=true. userId={UserId} itemId={ItemId} name={Name} playCount={PlayCount} path={Path}",
                 userId,
                 item.Id,
                 itemName,
@@ -874,7 +1272,7 @@ private static bool? TryGetBoolProperty(object obj, params string[] names)
             bool shouldSend = !state.LastPlayed || ud.PlayCount != state.LastPlayCount;
             if (shouldSend)
             {
-                var sceneId = await _stashClient.ResolveSceneIdAsync(item, ServiceToken).ConfigureAwait(false);
+                var sceneId = await ResolveSceneForStateAsync(item, state, ServiceToken).ConfigureAwait(false);
                 if (!string.IsNullOrWhiteSpace(sceneId))
                 {
                     // We sync play_count per playback session using playback stop events.
@@ -890,7 +1288,7 @@ var ok = await _stashClient.SyncPlayedAsync(sceneId!, playCountDelta: 0, playedD
                     if (ok)
                     {
                         _logger.LogInformation(
-                            "StashWatchSync: synced watched to Stash. sceneId={SceneId} userId={UserId} itemId={ItemId} name={Name}",
+                            "JFToStashSync: synced watched to Stash. sceneId={SceneId} userId={UserId} itemId={ItemId} name={Name}",
                             sceneId,
                             userId,
                             item.Id,
@@ -907,7 +1305,7 @@ var ok = await _stashClient.SyncPlayedAsync(sceneId!, playCountDelta: 0, playedD
                     else
                     {
                         _logger.LogWarning(
-                            "StashWatchSync: failed to sync watched to Stash. sceneId={SceneId} userId={UserId} itemId={ItemId} name={Name}",
+                            "JFToStashSync: failed to sync watched to Stash. sceneId={SceneId} userId={UserId} itemId={ItemId} name={Name}",
                             sceneId,
                             userId,
                             item.Id,
@@ -918,7 +1316,7 @@ var ok = await _stashClient.SyncPlayedAsync(sceneId!, playCountDelta: 0, playedD
                 {
                     var hasProviderId = item.ProviderIds is not null && item.ProviderIds.ContainsKey("Stash");
                     _logger.LogWarning(
-                        "StashWatchSync: could not resolve Stash scene for played item. userId={UserId} itemId={ItemId} name={Name} path={Path} hasProviderId={HasProviderId} pathFallback={PathFallback} jfPrefix={JfPrefix} stashPrefix={StashPrefix} fullPath={FullPath}",
+                        "JFToStashSync: could not resolve Stash scene for played item. userId={UserId} itemId={ItemId} name={Name} path={Path} hasProviderId={HasProviderId} pathFallback={PathFallback} jfPrefix={JfPrefix} stashPrefix={StashPrefix} fullPath={FullPath}",
                         userId,
                         item.Id,
                         itemName,
@@ -950,7 +1348,7 @@ var ok = await _stashClient.SyncPlayedAsync(sceneId!, playCountDelta: 0, playedD
             {
                 if (!Guid.TryParse(cfg.ResumeUserId.Trim(), out var resumeUserId))
                 {
-                    _logger.LogWarning("StashWatchSync: invalid ResumeUserId in plugin settings; resume sync skipped");
+                    _logger.LogWarning("JFToStashSync: invalid ResumeUserId in plugin settings; resume sync skipped");
                     return;
                 }
 
@@ -1010,16 +1408,10 @@ var ok = await _stashClient.SyncPlayedAsync(sceneId!, playCountDelta: 0, playedD
                 }
             }
 
-            var sceneId = state.SceneId;
+            var sceneId = await ResolveSceneForStateAsync(item, state, ServiceToken).ConfigureAwait(false);
             if (string.IsNullOrWhiteSpace(sceneId))
             {
-                sceneId = await _stashClient.ResolveSceneIdAsync(item, ServiceToken).ConfigureAwait(false);
-                if (string.IsNullOrWhiteSpace(sceneId))
-                {
-                    return;
-                }
-
-                state.SceneId = sceneId;
+                return;
             }
 
             await state.ResumeSyncGate.WaitAsync(ServiceToken).ConfigureAwait(false);
@@ -1040,18 +1432,63 @@ var ok = await _stashClient.SyncPlayedAsync(sceneId!, playCountDelta: 0, playedD
                     state.LastPlayed = false;
                     state.LastPlayCount = ud.PlayCount;
                     _logger.LogInformation(
-                        "StashWatchSync: synced playback resume point from user data. sceneId={SceneId} userId={UserId} seconds={Seconds:F1} final={IsFinal}",
+                        "JFToStashSync: synced playback resume point from user data. sceneId={SceneId} userId={UserId} seconds={Seconds:F1} final={IsFinal}",
                         sceneId, userId, resumeSeconds, isFinalSave);
                 }
                 else
                 {
-                    _logger.LogWarning("StashWatchSync: failed resume sync from user data. sceneId={SceneId} userId={UserId} seconds={Seconds:F1}", sceneId, userId, resumeSeconds);
+                    _logger.LogWarning("JFToStashSync: failed resume sync from user data. sceneId={SceneId} userId={UserId} seconds={Seconds:F1}", sceneId, userId, resumeSeconds);
                 }
             }
             finally
             {
                 state.ResumeSyncGate.Release();
             }
+        }
+    }
+
+    private static bool IsFavoriteStormSuppressed(SyncState state, bool value, DateTime nowUtc, out bool circuitJustOpened)
+    {
+        circuitJustOpened = false;
+        lock (state.FavoriteStormLock)
+        {
+            if (state.FavoriteCircuitOpenUntilUtc > nowUtc)
+            {
+                // Sliding suppression: if the source keeps oscillating, keep the circuit open
+                // until the stream has been quiet for a short period.
+                state.FavoriteCircuitOpenUntilUtc = nowUtc.AddSeconds(5);
+                state.FavoriteStormLastValue = value;
+                return true;
+            }
+
+            if (state.FavoriteStormWindowStartedUtc == DateTime.MinValue
+                || (nowUtc - state.FavoriteStormWindowStartedUtc).TotalSeconds > 3)
+            {
+                state.FavoriteStormWindowStartedUtc = nowUtc;
+                state.FavoriteStormTransitions = 0;
+                state.FavoriteStormLastValue = value;
+                return false;
+            }
+
+            if (state.FavoriteStormLastValue.HasValue
+                && state.FavoriteStormLastValue.Value != value)
+            {
+                state.FavoriteStormTransitions++;
+            }
+
+            state.FavoriteStormLastValue = value;
+
+            // Eight alternating transitions in <= 3 seconds cannot be a normal UI workflow.
+            if (state.FavoriteStormTransitions >= 8)
+            {
+                state.FavoriteCircuitOpenUntilUtc = nowUtc.AddSeconds(5);
+                state.FavoriteStormTransitions = 0;
+                state.FavoriteStormWindowStartedUtc = nowUtc;
+                circuitJustOpened = true;
+                return true;
+            }
+
+            return false;
         }
     }
 
@@ -1090,7 +1527,25 @@ var ok = await _stashClient.SyncPlayedAsync(sceneId!, playCountDelta: 0, playedD
 
         public bool? LastIsFavorite { get; set; } = null;
         public DateTime LastFavoriteSentUtc { get; set; } = DateTime.MinValue;
+        public SemaphoreSlim FavoriteSyncGate { get; } = new(1, 1);
 
+        // Favorite-loop circuit breaker. Protects Stash and the server from pathological
+        // Jellyfin/user-data oscillation without affecting ordinary Favorite ON/OFF actions.
+        public object FavoriteStormLock { get; } = new();
+        public DateTime FavoriteStormWindowStartedUtc { get; set; } = DateTime.MinValue;
+        public int FavoriteStormTransitions { get; set; }
+        public bool? FavoriteStormLastValue { get; set; }
+        public DateTime FavoriteCircuitOpenUntilUtc { get; set; } = DateTime.MinValue;
+
+        // Promotion from an exact fallback match to persistent Jellyfin/Stash identity.
+        public SemaphoreSlim IdentityPromotionGate { get; } = new(1, 1);
+        public bool JellyfinUrlPromoted { get; set; }
+        public object IdentityRepairLock { get; } = new();
+        public CancellationTokenSource? IdentityRepairCts { get; set; }
+        public string? PendingIdentitySceneId { get; set; }
+        public DateTime LastIdentityRepairUtc { get; set; } = DateTime.MinValue;
+        public DateTime IdentityPromotionSuppressFavoriteUntilUtc { get; set; } = DateTime.MinValue;
+        public Guid LastUserId { get; set; } = Guid.Empty;
 
         // Cached identity info for background flush.
         public string? SceneId { get; set; }

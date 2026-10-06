@@ -3,9 +3,9 @@ using System.Threading.Tasks;
 using MediaBrowser.Common.Api;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using StashWatchSync.Services;
+using JFToStashSync.Services;
 
-namespace StashWatchSync.Api;
+namespace JFToStashSync.Api;
 
 [ApiController]
 [Route("JFToStashSync")]
@@ -14,13 +14,29 @@ public sealed class JellyfinUrlSyncController : ControllerBase
 {
     private readonly JellyfinUrlSyncService _syncService;
     private readonly JellyfinPerformerUrlSyncService _performerSyncService;
+    private readonly StashClient _stashClient;
 
     public JellyfinUrlSyncController(
         JellyfinUrlSyncService syncService,
-        JellyfinPerformerUrlSyncService performerSyncService)
+        JellyfinPerformerUrlSyncService performerSyncService,
+        StashClient stashClient)
     {
         _syncService = syncService;
         _performerSyncService = performerSyncService;
+        _stashClient = stashClient;
+    }
+
+    [HttpPost("TestStashConnection")]
+    public async Task<ActionResult<StashConnectionTestResult>> TestStashConnection(
+        CancellationToken cancellationToken)
+    {
+        var result = await _stashClient.TestConnectionAsync(cancellationToken).ConfigureAwait(false);
+        if (!result.Success)
+        {
+            return BadRequest(result);
+        }
+
+        return Ok(result);
     }
 
     [HttpPost("SyncJellyfinUrl")]

@@ -1,4 +1,4 @@
-namespace StashWatchSync.Services;
+namespace JFToStashSync.Services;
 
 public sealed class JellyfinUrlUpsertResult
 {

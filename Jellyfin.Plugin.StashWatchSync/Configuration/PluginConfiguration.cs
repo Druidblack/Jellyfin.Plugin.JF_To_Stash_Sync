@@ -1,6 +1,6 @@
 using MediaBrowser.Model.Plugins;
 
-namespace StashWatchSync.Configuration;
+namespace JFToStashSync.Configuration;
 
 public sealed class PluginConfiguration : BasePluginConfiguration
 {
@@ -102,12 +102,59 @@ public bool SyncPerformerFavorites { get; set; } = false;
     public bool SyncJellyfinPerformerUrls { get; set; } = false;
 
     /// <summary>
+    /// Show an O+ button in the Jellyfin Web video player. Pressing it increments
+    /// the matching Stash scene o-counter using Stash sceneAddO.
+    /// Requires the File Transformation plugin to inject the client script.
+    /// </summary>
+    public bool EnablePlayerOCounterButton { get; set; } = true;
+
+    /// <summary>
+    /// Show an actors button in the Jellyfin Web video player. The popup lists Actor persons
+    /// for the currently playing item and lets the current Jellyfin user toggle favorites.
+    /// </summary>
+    public bool EnablePlayerActorListButton { get; set; } = true;
+
+    /// <summary>
+    /// In Jellyfin Web movie/video detail pages, replace recognized actor-role text
+    /// (Female, Male, Transgender Female, Transgender Male, Non Binary) with gender icons.
+    /// The role is read from the current video's Jellyfin People metadata, not parsed from localized DOM text.
+    /// Requires the File Transformation web integration.
+    /// </summary>
+    public bool ShowActorGenderIcons { get; set; } = false;
+
+    /// <summary>
+    /// In Jellyfin Web person detail pages, convert plain http/https URLs in the person's
+    /// overview text into clickable external links. Requires the File Transformation web integration.
+    /// </summary>
+    public bool LinkifyPersonOverviewUrls { get; set; } = false;
+
+    /// <summary>
+    /// In Jellyfin Web person detail pages, show clickable social/service icons next to
+    /// the person's name when matching http/https URLs are present in the Jellyfin Overview.
+    /// Uses the bundled user-supplied SVG logos and does not require Stash.
+    /// </summary>
+    public bool ShowPersonSocialIcons { get; set; } = false;
+
+    /// <summary>
     /// Base Jellyfin URL that Stash users can open, for example
     /// http://192.168.1.201:3096 or https://example.org/jellyfin.
     /// </summary>
     public string JellyfinBaseUrl { get; set; } = string.Empty;
 
-    /// <summary>If the item has no Stash provider id, attempt to find it by file path.</summary>
+    /// <summary>
+    /// When resolving a missing Stash provider id via Jellyfin metadata refresh, also perform
+    /// a full image refresh and replace existing images. Applies to the manual Stash-search button only.
+    /// </summary>
+    public bool ReplaceImagesOnStashMetadataRefresh { get; set; } = false;
+
+    /// <summary>
+    /// When the manual Stash-search button still has no Stash provider id after Jellyfin metadata refresh,
+    /// ask Stash to scan the parent folder of the mapped video path. Manual search skips path/title fallback.
+    /// This option applies only to the manual search button; Favorite-triggered lookup never starts a Stash scan.
+    /// </summary>
+    public bool ScanStashFolderOnManualSearchFailure { get; set; } = false;
+
+    /// <summary>If the item has no Stash provider id, Resume/Played/play-duration, O-counter, and batch URL sync may attempt to find it by file path. Favorite and manual search do not use this fallback.</summary>
     public bool EnablePathFallback { get; set; } = true;
 
     /// <summary>When searching by path, use the full path; otherwise only use the filename.</summary>

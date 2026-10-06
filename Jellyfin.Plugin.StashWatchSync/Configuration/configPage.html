@@ -7,7 +7,7 @@
     <div id="ConfigurationPage" data-role="page" class="page type-interactive pluginConfigurationPage">
         <div data-role="content">
             <div class="content-primary">
-                <form id="stashWatchSyncConfigForm">
+                <form id="jfToStashSyncConfigForm">
                     <div class="verticalSection">
                         <div class="sectionTitleContainer flex align-items-center">
                             <h2 class="sectionTitle">JF To Stash Sync</h2>
@@ -16,81 +16,146 @@
                         <div class="checkboxContainer checkboxContainer-withDescription">
                             <label class="emby-checkbox-label">
                                 <input id="Enabled" type="checkbox" is="emby-checkbox" />
-                                <span>Enable plugin</span>
+                                <span>Enable synchronization</span>
                             </label>
-                            <div class="fieldDescription">Turns syncing on/off.</div>
+                            <div class="fieldDescription">Turns all synchronization features of this plugin on or off.</div>
                         </div>
 
                         <div class="inputContainer">
-                            <label class="inputLabel inputLabelUnfocused" for="StashEndpoint">Stash endpoint</label>
+                            <label class="inputLabel inputLabelUnfocused" for="StashEndpoint">Stash address</label>
                             <input id="StashEndpoint" name="StashEndpoint" type="text" is="emby-input" placeholder="http://192.168.1.201:9999" />
-                            <div class="fieldDescription">Base URL of Stash (e.g. http://host:9999).</div>
+                            <div class="fieldDescription">Enter the address you use to open Stash, for example <code>http://192.168.1.201:9999</code>.</div>
                         </div>
 
                         <div class="inputContainer">
-                            <label class="inputLabel inputLabelUnfocused" for="StashApiKey">Stash API key</label>
+                            <label class="inputLabel inputLabelUnfocused" for="StashApiKey">Stash API key (optional)</label>
                             <input id="StashApiKey" name="StashApiKey" type="password" is="emby-input" />
-                            <div class="fieldDescription">Optional. Stash Settings → Security → API Keys.</div>
+                            <div class="fieldDescription">Enter a key only if your Stash server uses API authentication. You can create or copy it in Stash under Settings → Security → API Keys.</div>
                         </div>
 
-                        <h3 class="sectionTitle">What to sync</h3>
+                        <div class="inputContainer">
+                            <button id="TestStashConnection" is="emby-button" type="button" class="raised emby-button">
+                                <span>Test connection to Stash</span>
+                            </button>
+                            <div id="StashConnectionTestStatus" class="fieldDescription"></div>
+                            <div class="fieldDescription">
+                                Checks whether Jellyfin can connect to Stash using the address and API key entered above.
+                            </div>
+                        </div>
+
+                        <h3 class="sectionTitle">Synchronization</h3>
 
                         <div class="checkboxContainer checkboxContainer-withDescription">
                             <label class="emby-checkbox-label">
                                 <input id="SyncPlayDuration" type="checkbox" is="emby-checkbox" />
-                                <span>Play duration</span>
+                                <span>Watched time</span>
                             </label>
-                            <div class="fieldDescription">Adds the <em>real watched time</em> (estimated from playback progress) to Stash — for both finished and unfinished sessions.</div>
+                            <div class="fieldDescription">Keeps the watched time in Stash up to date with how long videos are actually played in Jellyfin, including unfinished viewing.</div>
                         </div>
 
                         <div class="checkboxContainer checkboxContainer-withDescription">
                             <label class="emby-checkbox-label">
                                 <input id="SyncResumePosition" type="checkbox" is="emby-checkbox" />
-                                <span>Resume playback position (Jellyfin → Stash)</span>
+                                <span>Continue watching position (Jellyfin → Stash)</span>
                             </label>
                             <div class="fieldDescription">
-                                Sends Jellyfin's saved playback position to the matching Stash scene, so the Stash player can continue where you left off.
-                                Only unfinished videos are assigned a resume position. A video marked watched in Jellyfin is still marked watched in Stash as before.
-                                Stash has one shared resume position per scene, not separate positions for each Jellyfin user.
+                                Saves the current playback position from Jellyfin to Stash so you can continue the same video in Stash.
+                                Finished videos are not given a continue-watching position. Stash keeps one shared position for each video, so the most recent update is used.
                             </div>
                         </div>
 
                         <div class="inputContainer">
-                            <label class="inputLabel inputLabelUnfocused" for="ResumeUserId">Jellyfin user ID for resume-position sync (optional)</label>
-                            <input id="ResumeUserId" name="ResumeUserId" type="text" is="emby-input" placeholder="(leave empty to accept all enabled Jellyfin users)" />
+                            <label class="inputLabel inputLabelUnfocused" for="ResumeUserId">Use continue-watching position from one Jellyfin user only (optional)</label>
+                            <input id="ResumeUserId" name="ResumeUserId" type="text" is="emby-input" placeholder="Leave empty to use any allowed user" />
                             <div class="fieldDescription">
-                                Optional single Jellyfin user GUID to use as the source of the shared Stash resume position.
-                                With this field empty, the last playback update from any allowed Jellyfin user wins.
-                                This filter only affects resume-position updates; the existing global user filter still applies to all sync features.
+                                Enter one Jellyfin user ID if only that user's playback position should be sent to Stash.
+                                Leave this empty to accept updates from any user allowed in the Users section below. If several users watch the same video, Stash keeps the most recently received position.
                             </div>
                         </div>
 
                         <div class="inputContainer">
-                            <label class="inputLabel inputLabelUnfocused" for="MinResumeIntervalSeconds">Resume update interval during playback (seconds)</label>
+                            <label class="inputLabel inputLabelUnfocused" for="MinResumeIntervalSeconds">How often to update the position (seconds)</label>
                             <input id="MinResumeIntervalSeconds" type="number" min="0" max="86400" step="1" is="emby-input" />
-                            <div class="fieldDescription">Default 60. Playback-stop saves bypass the interval and send the final position immediately.</div>
+                            <div class="fieldDescription">While a video is playing, the position is sent no more often than this. Default: 60 seconds. The final position is always sent when playback stops.</div>
                         </div>
 
                         <div class="inputContainer">
-                            <label class="inputLabel inputLabelUnfocused" for="MinResumeDeltaSeconds">Minimum resume-position change during playback (seconds)</label>
+                            <label class="inputLabel inputLabelUnfocused" for="MinResumeDeltaSeconds">Minimum position change to send (seconds)</label>
                             <input id="MinResumeDeltaSeconds" type="number" min="0" max="86400" step="1" is="emby-input" />
-                            <div class="fieldDescription">Default 20. Playback-stop saves always send the final position, even for smaller changes.</div>
+                            <div class="fieldDescription">Smaller position changes are ignored while the video is playing. Default: 20 seconds. The final position is always sent when playback stops.</div>
                         </div>
 
                         <div class="checkboxContainer checkboxContainer-withDescription">
                             <label class="emby-checkbox-label">
                                 <input id="SyncPerformerFavorites" type="checkbox" is="emby-checkbox" />
-                                <span>Performer favorites</span>
+                                <span>Actor favorites</span>
                             </label>
-                            <div class="fieldDescription">When you add/remove an <em>actor/person</em> to favorites in Jellyfin, the corresponding performer in Stash is also added/removed from favorites (only if the Jellyfin person has a <code>Stash</code> provider id).</div>
+                            <div class="fieldDescription">When you add or remove an actor from Favorites in Jellyfin, the matching performer in Stash is updated too. Actors that are not linked to Stash are skipped.</div>
                         </div>
 
                         <div class="checkboxContainer checkboxContainer-withDescription">
                             <label class="emby-checkbox-label">
                                 <input id="SyncFavoriteToRating" type="checkbox" is="emby-checkbox" />
-                                <span>Favorite videos → Stash rating</span>
+                                <span>Favorite videos</span>
                             </label>
-                            <div class="fieldDescription">When you add/remove a video to Jellyfin favorites, set the matching Stash scene rating to 5 / 0.</div>
+                            <div class="fieldDescription">When a video is added to Favorites in Jellyfin, the matching Stash scene is rated 5 stars. Removing it from Favorites sets the rating to 0.</div>
+                        </div>
+
+                        <h3 class="sectionTitle">Jellyfin Web</h3>
+
+                        <div class="checkboxContainer checkboxContainer-withDescription">
+                            <label class="emby-checkbox-label">
+                                <input id="EnablePlayerOCounterButton" type="checkbox" is="emby-checkbox" />
+                                <span>Show O-counter button in the Jellyfin Web player</span>
+                            </label>
+                            <div class="fieldDescription">
+                                Adds an O-counter button to the Jellyfin Web player. Each press adds 1 to the O counter of the matching video in Stash and records it in Stash history.
+                                Works in Jellyfin Web only. Requires <strong>File Transformation 3.x</strong>.
+                            </div>
+                        </div>
+
+                        <div class="checkboxContainer checkboxContainer-withDescription">
+                            <label class="emby-checkbox-label">
+                                <input id="EnablePlayerActorListButton" type="checkbox" is="emby-checkbox" />
+                                <span>Show actors button in the Jellyfin Web player</span>
+                            </label>
+                            <div class="fieldDescription">
+                                Adds an actors button to the Jellyfin Web player. Press it to open a list of actors from the current video, view their photos, and add or remove them from Jellyfin Favorites.
+                                Works in Jellyfin Web only and requires <strong>File Transformation 3.x</strong>.
+                            </div>
+                        </div>
+
+                        <div class="checkboxContainer checkboxContainer-withDescription">
+                            <label class="emby-checkbox-label">
+                                <input id="ShowActorGenderIcons" type="checkbox" is="emby-checkbox" />
+                                <span>Show gender icons for actors</span>
+                            </label>
+                            <div class="fieldDescription">
+                                Shows gender icons for actors on Jellyfin Web video pages and in the actors popup in the player. Supported gender labels are shown as icons; other role text is left unchanged.
+                                Works in Jellyfin Web only and requires <strong>File Transformation 3.x</strong>.
+                            </div>
+                        </div>
+
+                        <div class="checkboxContainer checkboxContainer-withDescription">
+                            <label class="emby-checkbox-label">
+                                <input id="LinkifyPersonOverviewUrls" type="checkbox" is="emby-checkbox" />
+                                <span>Make links in actor descriptions clickable</span>
+                            </label>
+                            <div class="fieldDescription">
+                                Turns web addresses written in an actor's description into clickable links that open in a new tab.
+                                Works in Jellyfin Web only and requires <strong>File Transformation 3.x</strong>.
+                            </div>
+                        </div>
+
+                        <div class="checkboxContainer checkboxContainer-withDescription">
+                            <label class="emby-checkbox-label">
+                                <input id="ShowPersonSocialIcons" type="checkbox" is="emby-checkbox" />
+                                <span>Show social icons next to actor names</span>
+                            </label>
+                            <div class="fieldDescription">
+                                If an actor's description contains supported social or profile links, Jellyfin Web shows convenient icons next to the actor's name. Clicking an icon opens that page in a new tab.
+                                Supports Instagram, OnlyFans, Patreon, Reddit, Telegram, TikTok, Tumblr, Twitch, VK, WordPress, X/Twitter, YouTube, Bluesky, Facebook and IMDb. Requires <strong>File Transformation 3.x</strong>.
+                            </div>
                         </div>
 
                         <h3 class="sectionTitle">Jellyfin links in Stash</h3>
@@ -98,41 +163,39 @@
                         <div class="checkboxContainer checkboxContainer-withDescription">
                             <label class="emby-checkbox-label">
                                 <input id="SyncJellyfinUrls" type="checkbox" is="emby-checkbox" />
-                                <span>Sync Jellyfin video links to Stash</span>
+                                <span>Add Jellyfin links to Stash videos</span>
                             </label>
                             <div class="fieldDescription">
-                                Enables the scheduled task that writes a direct Jellyfin details link into the matching Stash scene URL list.
-                                The default task interval is 24 hours and can be changed in Jellyfin Scheduled Tasks.
+                                Periodically adds a link back to the Jellyfin video page to matching scenes in Stash.
+                                You can change how often this runs in Jellyfin Dashboard → Scheduled Tasks.
                             </div>
                         </div>
 
                         <div class="checkboxContainer checkboxContainer-withDescription">
                             <label class="emby-checkbox-label">
                                 <input id="SyncJellyfinPerformerUrls" type="checkbox" is="emby-checkbox" />
-                                <span>Sync Jellyfin actor links to Stash performers</span>
+                                <span>Add Jellyfin links to Stash performers</span>
                             </label>
                             <div class="fieldDescription">
-                                Enables a separate scheduled task that writes the Jellyfin Person details link into the matching Stash performer URL list.
-                                A Jellyfin Person must have a <code>Stash</code> provider ID so the plugin cannot update the wrong performer.
+                                Periodically adds a link back to the Jellyfin actor page to matching performers in Stash.
+                                Actors that are not already linked with Stash are skipped.
                             </div>
                         </div>
 
                         <div class="inputContainer">
-                            <label class="inputLabel inputLabelUnfocused" for="JellyfinBaseUrl">Jellyfin base URL</label>
+                            <label class="inputLabel inputLabelUnfocused" for="JellyfinBaseUrl">Jellyfin address</label>
                             <input id="JellyfinBaseUrl" name="JellyfinBaseUrl" type="text" is="emby-input" placeholder="http://192.168.1.201:3096" />
                             <div class="fieldDescription">
-                                Address that should be saved in Stash. Enter the server base URL only; the plugin adds
-                                <code>/web/index.html#/details?id=...&amp;serverId=...</code> automatically.
-                                Reverse-proxy paths such as <code>https://example.org/jellyfin</code> are supported.
+                                Enter the address you normally use to open Jellyfin, for example <code>http://192.168.1.201:8096</code> or <code>https://example.org/jellyfin</code>.
+                                This is the address that will be saved in Stash links.
                             </div>
                         </div>
 
                         <div class="inputContainer">
-                            <label class="inputLabel inputLabelUnfocused" for="ManualJellyfinItemId">Manual test: Jellyfin video ID</label>
+                            <label class="inputLabel inputLabelUnfocused" for="ManualJellyfinItemId">Send a link for one video</label>
                             <input id="ManualJellyfinItemId" name="ManualJellyfinItemId" type="text" is="emby-input" placeholder="0aeba4bd52288ce9753e1c3d91cb135a" />
                             <div class="fieldDescription">
-                                Enter one Jellyfin video Item ID and press the button below. Current settings are saved first.
-                                The test works even if automatic scheduled synchronization is disabled.
+                                Enter a Jellyfin video ID to add its Jellyfin link to Stash immediately. This can be used even when automatic link synchronization is turned off.
                             </div>
                         </div>
 
@@ -142,11 +205,10 @@
                         <div id="JellyfinUrlSyncStatus" class="fieldDescription" style="margin-top: .7em;"></div>
 
                         <div class="inputContainer" style="margin-top: 1.5em;">
-                            <label class="inputLabel inputLabelUnfocused" for="ManualJellyfinPersonId">Manual test: Jellyfin actor/person ID</label>
+                            <label class="inputLabel inputLabelUnfocused" for="ManualJellyfinPersonId">Send a link for one actor</label>
                             <input id="ManualJellyfinPersonId" name="ManualJellyfinPersonId" type="text" is="emby-input" placeholder="Jellyfin Person ID" />
                             <div class="fieldDescription">
-                                Enter one Jellyfin Person ID to test performer URL synchronization. Current settings are saved first.
-                                The Person must contain a <code>Stash</code> provider ID. The test works even if automatic performer-link synchronization is disabled.
+                                Enter a Jellyfin actor ID to add that actor's Jellyfin link to the matching Stash performer immediately. The actor must already be linked with Stash.
                             </div>
                         </div>
 
@@ -155,41 +217,66 @@
                         </button>
                         <div id="JellyfinPerformerUrlSyncStatus" class="fieldDescription" style="margin-top: .7em;"></div>
 
-                        <h3 class="sectionTitle">Matching scenes</h3>
+                        <h3 class="sectionTitle">Finding matching videos</h3>
+
+                        <div class="checkboxContainer checkboxContainer-withDescription">
+                            <label class="emby-checkbox-label">
+                                <input id="ReplaceImagesOnStashMetadataRefresh" type="checkbox" is="emby-checkbox" />
+                                <span>Replace images during manual Stash search</span>
+                            </label>
+                            <div class="fieldDescription">
+                                When manual Stash search refreshes Jellyfin metadata, also refresh and replace the video's images. Leave this off if you want to keep the existing artwork.
+                            </div>
+                        </div>
+
+                        <div class="checkboxContainer checkboxContainer-withDescription">
+                            <label class="emby-checkbox-label">
+                                <input id="ScanStashFolderOnManualSearchFailure" type="checkbox" is="emby-checkbox" />
+                                <span>Scan the Stash folder if manual search cannot find the video</span>
+                            </label>
+                            <div class="fieldDescription">
+                                If manual search still cannot find a video, ask Stash to scan the folder containing that file and try again automatically.
+                                The path settings below are used when Jellyfin and Stash see the same files under different folder paths.
+                            </div>
+                        </div>
 
                         <div class="checkboxContainer checkboxContainer-withDescription">
                             <label class="emby-checkbox-label">
                                 <input id="EnablePathFallback" type="checkbox" is="emby-checkbox" />
-                                <span>Fallback to file path search</span>
+                                <span>Find videos by file path when no direct match is available</span>
                             </label>
-                            <div class="fieldDescription">If the item has no provider id &quot;Stash&quot;, try to find a Stash Scene by file path.</div>
+                            <div class="fieldDescription">Lets playback position, watched time, O-counter and automatic link synchronization find the matching Stash video using its file location when a direct link is not available.</div>
                         </div>
 
                         <div class="checkboxContainer checkboxContainer-withDescription">
                             <label class="emby-checkbox-label">
                                 <input id="SearchByFullPath" type="checkbox" is="emby-checkbox" />
-                                <span>Search by full path</span>
+                                <span>Use the full file path when searching</span>
                             </label>
-                            <div class="fieldDescription">If off, only the filename is used when searching in Stash.</div>
+                            <div class="fieldDescription">When enabled, Jellyfin and Stash file locations are compared using the full path. When disabled, only the filename is used. Full paths are safer when different folders can contain files with the same name.</div>
                         </div>
 
                         <div class="inputContainer">
-                            <label class="inputLabel inputLabelUnfocused" for="JellyfinPathPrefix">Jellyfin path prefix</label>
+                            <label class="inputLabel inputLabelUnfocused" for="JellyfinPathPrefix">Jellyfin media path starts with</label>
                             <input id="JellyfinPathPrefix" name="JellyfinPathPrefix" type="text" is="emby-input" placeholder="/mnt/media" />
-                            <div class="fieldDescription">Optional. If your Jellyfin and Stash use different mount points, set a prefix mapping.</div>
+                            <div class="fieldDescription">Use this only if Jellyfin and Stash see the same media under different paths. Example: if Jellyfin sees <code>/mnt/media/Studio/video.mp4</code>, enter <code>/mnt/media</code>.</div>
                         </div>
 
                         <div class="inputContainer">
-                            <label class="inputLabel inputLabelUnfocused" for="StashPathPrefix">Stash path prefix</label>
+                            <label class="inputLabel inputLabelUnfocused" for="StashPathPrefix">The same media path in Stash starts with</label>
                             <input id="StashPathPrefix" name="StashPathPrefix" type="text" is="emby-input" placeholder="/data" />
+                            <div class="fieldDescription">Using the example above, if Stash sees the file as <code>/data/Studio/video.mp4</code>, enter <code>/data</code>. Leave both path fields empty when Jellyfin and Stash use the same paths.</div>
                         </div>
 
                         <h3 class="sectionTitle">Users</h3>
 
                         <div class="inputContainer">
-                            <label class="inputLabel inputLabelUnfocused" for="OnlyUserIdsCsv">Only sync these Jellyfin User IDs</label>
-                            <input id="OnlyUserIdsCsv" name="OnlyUserIdsCsv" type="text" is="emby-input" placeholder="(leave empty to sync all users)" />
-                            <div class="fieldDescription">Comma-separated list. Empty = all users.</div>
+                            <label class="inputLabel inputLabelUnfocused" for="OnlyUserIdsCsv">Users included in synchronization</label>
+                            <input id="OnlyUserIdsCsv" name="OnlyUserIdsCsv" type="text" is="emby-input" placeholder="Leave empty for all users, or enter user IDs separated by commas" />
+                            <div class="fieldDescription">
+                                Leave this empty to synchronize all Jellyfin users. To limit synchronization, enter one or more Jellyfin user IDs separated by commas.
+                                This affects playback, favorites, ratings and continue-watching position. Scheduled link tasks are not limited by this setting.
+                            </div>
                         </div>
 
                         <button is="emby-button" type="submit" class="raised button-submit block emby-button">
@@ -219,8 +306,15 @@
 
                 $('#SyncJellyfinUrls').prop('checked', config.SyncJellyfinUrls === true);
                 $('#SyncJellyfinPerformerUrls').prop('checked', config.SyncJellyfinPerformerUrls === true);
+                $('#EnablePlayerOCounterButton').prop('checked', config.EnablePlayerOCounterButton !== false);
+                $('#EnablePlayerActorListButton').prop('checked', config.EnablePlayerActorListButton !== false);
+                $('#ShowActorGenderIcons').prop('checked', config.ShowActorGenderIcons === true);
+                $('#LinkifyPersonOverviewUrls').prop('checked', config.LinkifyPersonOverviewUrls === true);
+                $('#ShowPersonSocialIcons').prop('checked', config.ShowPersonSocialIcons === true);
                 $('#JellyfinBaseUrl').val(config.JellyfinBaseUrl || '').change();
 
+                $('#ReplaceImagesOnStashMetadataRefresh').prop('checked', config.ReplaceImagesOnStashMetadataRefresh === true);
+                $('#ScanStashFolderOnManualSearchFailure').prop('checked', config.ScanStashFolderOnManualSearchFailure === true);
                 $('#EnablePathFallback').prop('checked', config.EnablePathFallback);
                 $('#SearchByFullPath').prop('checked', config.SearchByFullPath);
                 $('#JellyfinPathPrefix').val(config.JellyfinPathPrefix || '').change();
@@ -243,8 +337,15 @@
 
                 config.SyncJellyfinUrls = $('#SyncJellyfinUrls').prop('checked');
                 config.SyncJellyfinPerformerUrls = $('#SyncJellyfinPerformerUrls').prop('checked');
+                config.EnablePlayerOCounterButton = $('#EnablePlayerOCounterButton').prop('checked');
+                config.EnablePlayerActorListButton = $('#EnablePlayerActorListButton').prop('checked');
+                config.ShowActorGenderIcons = $('#ShowActorGenderIcons').prop('checked');
+                config.LinkifyPersonOverviewUrls = $('#LinkifyPersonOverviewUrls').prop('checked');
+                config.ShowPersonSocialIcons = $('#ShowPersonSocialIcons').prop('checked');
                 config.JellyfinBaseUrl = $('#JellyfinBaseUrl').val();
 
+                config.ReplaceImagesOnStashMetadataRefresh = $('#ReplaceImagesOnStashMetadataRefresh').prop('checked');
+                config.ScanStashFolderOnManualSearchFailure = $('#ScanStashFolderOnManualSearchFailure').prop('checked');
                 config.EnablePathFallback = $('#EnablePathFallback').prop('checked');
                 config.SearchByFullPath = $('#SearchByFullPath').prop('checked');
                 config.JellyfinPathPrefix = $('#JellyfinPathPrefix').val();
@@ -271,6 +372,7 @@
 
             $('#ConfigurationPage').on('pageshow', function () {
                 Dashboard.showLoadingMsg();
+                $('#StashConnectionTestStatus').text('');
                 $('#JellyfinUrlSyncStatus').text('');
                 $('#JellyfinPerformerUrlSyncStatus').text('');
 
@@ -281,12 +383,58 @@
                     Dashboard.hideLoadingMsg();
                 });
 
+                $('#TestStashConnection')
+                    .off('click.stashConnectionTest')
+                    .on('click.stashConnectionTest', function () {
+                        var endpoint = ($('#StashEndpoint').val() || '').trim();
+                        if (!endpoint) {
+                            $('#StashConnectionTestStatus').text('Enter the Stash address first.');
+                            return;
+                        }
+
+                        $('#StashConnectionTestStatus').text('Testing connection to Stash...');
+                        Dashboard.showLoadingMsg();
+
+                        saveCurrentPageConfig()
+                            .then(function () {
+                                return ApiClient.fetch({
+                                    url: ApiClient.getUrl('JFToStashSync/TestStashConnection'),
+                                    type: 'POST'
+                                });
+                            })
+                            .then(function (response) {
+                                return response.json().then(function (body) {
+                                    if (!response.ok) {
+                                        throw new Error(
+                                            getResultValue(body, 'message', 'Message') ||
+                                            'Could not connect to Stash.'
+                                        );
+                                    }
+
+                                    return body;
+                                });
+                            })
+                            .then(function (result) {
+                                var message = getResultValue(result, 'message', 'Message') || 'Connection to Stash succeeded.';
+
+                                $('#StashConnectionTestStatus').text('✓ ' + message);
+                                Dashboard.hideLoadingMsg();
+                            })
+                            .catch(function (error) {
+                                $('#StashConnectionTestStatus').text(
+                                    '✗ ' + (error && error.message ? error.message : error)
+                                );
+                                Dashboard.hideLoadingMsg();
+                            });
+                    });
+
+
                 $('#SyncJellyfinUrlNow')
                     .off('click.jellyfinUrlSync')
                     .on('click.jellyfinUrlSync', function () {
                         var itemId = ($('#ManualJellyfinItemId').val() || '').trim();
                         if (!itemId) {
-                            $('#JellyfinUrlSyncStatus').text('Enter a Jellyfin video Item ID first.');
+                            $('#JellyfinUrlSyncStatus').text('Enter a Jellyfin video ID first.');
                             return;
                         }
 
@@ -338,7 +486,7 @@
                     .on('click.jellyfinPerformerUrlSync', function () {
                         var personId = ($('#ManualJellyfinPersonId').val() || '').trim();
                         if (!personId) {
-                            $('#JellyfinPerformerUrlSyncStatus').text('Enter a Jellyfin actor/person Item ID first.');
+                            $('#JellyfinPerformerUrlSyncStatus').text('Enter a Jellyfin actor ID first.');
                             return;
                         }
 

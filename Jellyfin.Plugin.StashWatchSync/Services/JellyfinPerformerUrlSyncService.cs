@@ -8,7 +8,7 @@ using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
 using Microsoft.Extensions.Logging;
 
-namespace StashWatchSync.Services;
+namespace JFToStashSync.Services;
 
 /// <summary>
 /// Synchronizes direct Jellyfin web-client links for Person items to matching Stash performers.
@@ -183,7 +183,7 @@ public sealed class JellyfinPerformerUrlSyncService
                 {
                     result.Skipped++;
                     _logger.LogDebug(
-                        "StashWatchSync: Jellyfin performer URL skipped. personId={PersonId} name={Name} reason={Reason}",
+                        "JFToStashSync: Jellyfin performer URL skipped. personId={PersonId} name={Name} reason={Reason}",
                         person.Id,
                         person.Name,
                         personResult.Message);
@@ -198,7 +198,7 @@ public sealed class JellyfinPerformerUrlSyncService
                 result.Failed++;
                 _logger.LogError(
                     ex,
-                    "StashWatchSync: Jellyfin performer URL sync failed. personId={PersonId} name={Name}",
+                    "JFToStashSync: Jellyfin performer URL sync failed. personId={PersonId} name={Name}",
                     person.Id,
                     person.Name);
             }
@@ -211,7 +211,7 @@ public sealed class JellyfinPerformerUrlSyncService
             $"skipped {result.Skipped}, failed {result.Failed}.";
 
         _logger.LogInformation(
-            "StashWatchSync: Jellyfin performer URL batch finished. {Summary}",
+            "JFToStashSync: Jellyfin performer URL batch finished. {Summary}",
             result.Message);
 
         return result;

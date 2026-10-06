@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using Newtonsoft.Json;
 
-namespace StashWatchSync.Services;
+namespace JFToStashSync.Services;
 
 public static class GraphQlModels
 {
@@ -18,6 +18,12 @@ public static class GraphQlModels
     {
         [JsonProperty("message")]
         public string Message { get; set; } = string.Empty;
+    }
+
+    public sealed class MetadataScanData
+    {
+        [JsonProperty("metadataScan")]
+        public string? MetadataScan { get; set; }
     }
 
     public sealed class FindScenesData
@@ -121,6 +127,61 @@ public static class GraphQlModels
 
         [JsonProperty("urls")]
         public List<string> Urls { get; set; } = new();
+    }
+
+
+    public sealed class SimilarFindSceneData
+    {
+        [JsonProperty("findScene")]
+        public SimilarScene? FindScene { get; set; }
+    }
+
+    public sealed class SimilarFindScenesData
+    {
+        [JsonProperty("findScenes")]
+        public SimilarFindScenesResult? FindScenes { get; set; }
+    }
+
+    public sealed class SimilarFindScenesResult
+    {
+        [JsonProperty("scenes")]
+        public List<SimilarScene> Scenes { get; set; } = new();
+    }
+
+    public sealed class SimilarScene
+    {
+        [JsonProperty("id")]
+        public string Id { get; set; } = string.Empty;
+
+        [JsonProperty("title")]
+        public string? Title { get; set; }
+
+        [JsonProperty("performers")]
+        public List<SimilarPerformer> Performers { get; set; } = new();
+
+        [JsonProperty("tags")]
+        public List<SimilarTag> Tags { get; set; } = new();
+    }
+
+    public sealed class SimilarPerformer
+    {
+        [JsonProperty("id")]
+        public string Id { get; set; } = string.Empty;
+
+        [JsonProperty("name")]
+        public string Name { get; set; } = string.Empty;
+
+        [JsonProperty("favorite")]
+        public bool Favorite { get; set; }
+    }
+
+    public sealed class SimilarTag
+    {
+        [JsonProperty("id")]
+        public string Id { get; set; } = string.Empty;
+
+        [JsonProperty("name")]
+        public string Name { get; set; } = string.Empty;
     }
 
     public sealed class PerformerUpdateData

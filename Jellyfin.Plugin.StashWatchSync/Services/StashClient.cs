@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Net.Http;
@@ -13,7 +14,7 @@ using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
-namespace StashWatchSync.Services;
+namespace JFToStashSync.Services;
 
 /// <summary>
 /// Minimal Stash GraphQL client used only for syncing activity.
@@ -22,11 +23,59 @@ public sealed class StashClient
 {
     private const string ProviderIdKey = "Stash";
 
+    // Lightweight Stash-specific query used by the settings-page connection test.
+    // __typename keeps the test compatible across Stash versions while still
+    // proving that the endpoint exposes Stash's `version` GraphQL field.
+    private const string ConnectionTestQuery = @"query JFToStashSyncConnectionTest {
+  version { __typename }
+}";
+
+    private const string MetadataScanMutation = @"mutation metadataScan($input: ScanMetadataInput!) {
+  metadataScan(input: $input)
+}";
+
     private const string FindScenesQuery = @"query findScenes($filter: FindFilterType, $scene_filter: SceneFilterType) {
   findScenes(filter: $filter, scene_filter: $scene_filter) {
     scenes {
       id
       files { path }
+    }
+  }
+}";
+
+    private const string SimilarBaseSceneQuery = @"query JFToStashSyncSimilarBaseScene($id: ID!) {
+  findScene(id: $id) {
+    id
+    title
+    performers { id name favorite }
+    tags { id name }
+  }
+}";
+
+    private const string SimilarScenesByPerformersQuery = @"query JFToStashSyncSimilarByPerformers($ids: [ID!], $limit: Int!) {
+  findScenes(
+    scene_filter: { performers: { value: $ids, modifier: INCLUDES } }
+    filter: { per_page: $limit }
+  ) {
+    scenes {
+      id
+      title
+      performers { id name favorite }
+      tags { id name }
+    }
+  }
+}";
+
+    private const string SimilarScenesByTagQuery = @"query JFToStashSyncSimilarByTag($name: String!, $limit: Int!) {
+  findScenes(
+    scene_filter: { tags_filter: { name: { value: $name, modifier: INCLUDES } } }
+    filter: { per_page: $limit }
+  ) {
+    scenes {
+      id
+      title
+      performers { id name favorite }
+      tags { id name }
     }
   }
 }";
@@ -100,6 +149,18 @@ public sealed class StashClient
   }
 }";
 
+    // Stash's current O-counter API. sceneAddO also records the event in o_history.
+    private const string SceneAddOMutation = @"mutation sceneAddO($id: ID!) {
+  sceneAddO(id: $id) {
+    count
+  }
+}";
+
+    // Compatibility fallback for older Stash builds.
+    private const string SceneIncrementOMutation = @"mutation sceneIncrementO($id: ID!) {
+  sceneIncrementO(id: $id)
+}";
+
     // Introspection helpers to discover the correct signatures for play-count mutations.
     // Some Stash builds changed these signatures over time; introspection keeps us version-agnostic.
     private const string IntrospectMutationTypeQuery = @"query IntrospectMutationType($typeName: String!) {
@@ -144,12 +205,311 @@ public sealed class StashClient
         return cfg is not null && cfg.Enabled && !string.IsNullOrWhiteSpace(cfg.StashEndpoint);
     }
 
+    /// <summary>
+    /// Tests the currently configured Stash endpoint and API key.
+    /// This deliberately ignores the plugin Enabled switch so the connection can
+    /// be verified before enabling synchronization.
+    /// </summary>
+    public async Task<StashConnectionTestResult> TestConnectionAsync(CancellationToken ct)
+    {
+        var cfg = Plugin.Instance?.Configuration;
+        var endpoint = cfg?.StashEndpoint?.Trim() ?? string.Empty;
+        var apiKey = cfg?.StashApiKey ?? string.Empty;
+
+        if (string.IsNullOrWhiteSpace(endpoint))
+        {
+            return StashConnectionTestResult.Fail("Stash endpoint is empty.");
+        }
+
+        var graphqlUrl = NormalizeGraphQlUrl(endpoint);
+        if (!Uri.TryCreate(graphqlUrl, UriKind.Absolute, out var uri)
+            || (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
+        {
+            return StashConnectionTestResult.Fail("Stash endpoint must be a valid HTTP or HTTPS URL.", endpoint);
+        }
+
+        using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        timeoutCts.CancelAfter(TimeSpan.FromSeconds(10));
+        var stopwatch = Stopwatch.StartNew();
+
+        try
+        {
+            using var req = new HttpRequestMessage(HttpMethod.Post, uri);
+            req.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+            req.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/graphql-response+json"));
+
+            if (!string.IsNullOrWhiteSpace(apiKey))
+            {
+                req.Headers.TryAddWithoutValidation("ApiKey", apiKey);
+            }
+
+            req.Content = new StringContent(
+                JsonConvert.SerializeObject(new { query = ConnectionTestQuery, variables = new { } }),
+                Encoding.UTF8,
+                "application/json");
+
+            var client = _httpClientFactory.CreateClient();
+            using var response = await client.SendAsync(req, timeoutCts.Token).ConfigureAwait(false);
+            var body = await response.Content.ReadAsStringAsync(timeoutCts.Token).ConfigureAwait(false);
+            stopwatch.Stop();
+
+            if (!response.IsSuccessStatusCode)
+            {
+                var message = response.StatusCode == System.Net.HttpStatusCode.Unauthorized
+                    ? "Stash returned HTTP 401 Unauthorized. Check the API key."
+                    : $"Stash returned HTTP {(int)response.StatusCode} ({response.ReasonPhrase}).";
+
+                _logger.LogWarning(
+                    "JFToStashSync: Stash connection test failed. endpoint={Endpoint} status={StatusCode}",
+                    endpoint,
+                    (int)response.StatusCode);
+
+                return StashConnectionTestResult.Fail(message, endpoint, (int)response.StatusCode, stopwatch.ElapsedMilliseconds);
+            }
+
+            JObject parsed;
+            try
+            {
+                parsed = JObject.Parse(body);
+            }
+            catch (JsonException)
+            {
+                return StashConnectionTestResult.Fail(
+                    "The server responded, but the response was not valid Stash GraphQL JSON.",
+                    endpoint,
+                    (int)response.StatusCode,
+                    stopwatch.ElapsedMilliseconds);
+            }
+
+            if (parsed["errors"] is JArray errors && errors.Count > 0)
+            {
+                var errorText = string.Join(
+                    " | ",
+                    errors
+                        .Select(e => e?["message"]?.ToString())
+                        .Where(m => !string.IsNullOrWhiteSpace(m))
+                        .Take(3));
+
+                if (string.IsNullOrWhiteSpace(errorText))
+                {
+                    errorText = "Stash GraphQL returned an error.";
+                }
+
+                return StashConnectionTestResult.Fail(
+                    errorText,
+                    endpoint,
+                    (int)response.StatusCode,
+                    stopwatch.ElapsedMilliseconds);
+            }
+
+            var typeName = parsed["data"]?["version"]?["__typename"]?.ToString();
+            if (!string.Equals(typeName, "Version", StringComparison.Ordinal))
+            {
+                return StashConnectionTestResult.Fail(
+                    "The GraphQL endpoint responded, but it does not look like a compatible Stash server.",
+                    endpoint,
+                    (int)response.StatusCode,
+                    stopwatch.ElapsedMilliseconds);
+            }
+
+            _logger.LogInformation(
+                "JFToStashSync: Stash connection test succeeded. endpoint={Endpoint} elapsedMs={ElapsedMs}",
+                endpoint,
+                stopwatch.ElapsedMilliseconds);
+
+            return StashConnectionTestResult.Ok(endpoint, stopwatch.ElapsedMilliseconds);
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        {
+            stopwatch.Stop();
+            return StashConnectionTestResult.Fail(
+                "Connection to Stash timed out after 10 seconds.",
+                endpoint,
+                null,
+                stopwatch.ElapsedMilliseconds);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (HttpRequestException ex)
+        {
+            stopwatch.Stop();
+            _logger.LogWarning(ex, "JFToStashSync: Stash connection test failed. endpoint={Endpoint}", endpoint);
+            return StashConnectionTestResult.Fail(
+                "Could not connect to Stash: " + ex.Message,
+                endpoint,
+                null,
+                stopwatch.ElapsedMilliseconds);
+        }
+        catch (Exception ex)
+        {
+            stopwatch.Stop();
+            _logger.LogError(ex, "JFToStashSync: unexpected Stash connection test error. endpoint={Endpoint}", endpoint);
+            return StashConnectionTestResult.Fail(
+                "Unexpected error while testing Stash: " + ex.Message,
+                endpoint,
+                null,
+                stopwatch.ElapsedMilliseconds);
+        }
+    }
+
+    /// <summary>
+    /// Returns Stash similar scenes using the same candidate selection and scoring rules
+    /// as the original stashSimilarScenes userscript.
+    /// </summary>
+    public async Task<IReadOnlyList<StashSimilarSceneMatch>> GetSimilarScenesAsync(
+        string baseSceneId,
+        CancellationToken ct)
+    {
+        const int TargetScenes = 10;
+        const int QueryLimit = 40;
+        const int TagFallbackCount = 3;
+        const int FavoritePerformerWeight = 100;
+        const int SharedPerformerWeight = 25;
+        const int SharedTagWeight = 10;
+
+        if (string.IsNullOrWhiteSpace(baseSceneId) || !IsConfigured())
+        {
+            return Array.Empty<StashSimilarSceneMatch>();
+        }
+
+        var baseResponse = await SendAsync<GraphQlModels.SimilarFindSceneData>(
+            SimilarBaseSceneQuery,
+            new { id = baseSceneId },
+            ct).ConfigureAwait(false);
+        var baseScene = baseResponse?.Data?.FindScene;
+        if (baseScene is null)
+        {
+            _logger.LogDebug(
+                "JFToStashSync: Stash Similar Scenes base scene not found. sceneId={SceneId}",
+                baseSceneId);
+            return Array.Empty<StashSimilarSceneMatch>();
+        }
+
+        var basePerformerIds = new HashSet<string>(
+            baseScene.Performers
+                .Select(p => p.Id)
+                .Where(id => !string.IsNullOrWhiteSpace(id)),
+            StringComparer.Ordinal);
+        var baseTagIds = new HashSet<string>(
+            baseScene.Tags
+                .Select(t => t.Id)
+                .Where(id => !string.IsNullOrWhiteSpace(id)),
+            StringComparer.Ordinal);
+
+        int Score(GraphQlModels.SimilarScene scene)
+        {
+            var score = 0;
+            foreach (var performer in scene.Performers)
+            {
+                if (performer.Favorite)
+                {
+                    score += FavoritePerformerWeight;
+                }
+
+                if (!string.IsNullOrWhiteSpace(performer.Id) && basePerformerIds.Contains(performer.Id))
+                {
+                    score += SharedPerformerWeight;
+                }
+            }
+
+            foreach (var tag in scene.Tags)
+            {
+                if (!string.IsNullOrWhiteSpace(tag.Id) && baseTagIds.Contains(tag.Id))
+                {
+                    score += SharedTagWeight;
+                }
+            }
+
+            return score;
+        }
+
+        var scored = new Dictionary<string, StashSimilarSceneMatch>(StringComparer.Ordinal);
+
+        void AddCandidate(GraphQlModels.SimilarScene scene)
+        {
+            if (string.IsNullOrWhiteSpace(scene.Id)
+                || string.Equals(scene.Id, baseScene.Id, StringComparison.Ordinal)
+                || scored.ContainsKey(scene.Id))
+            {
+                return;
+            }
+
+            scored[scene.Id] = new StashSimilarSceneMatch
+            {
+                SceneId = scene.Id,
+                Score = Score(scene),
+            };
+        }
+
+        var performerIds = baseScene.Performers
+            .Select(p => p.Id)
+            .Where(id => !string.IsNullOrWhiteSpace(id))
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+
+        if (performerIds.Length > 0)
+        {
+            var performerResponse = await SendAsync<GraphQlModels.SimilarFindScenesData>(
+                SimilarScenesByPerformersQuery,
+                new { ids = performerIds, limit = QueryLimit },
+                ct).ConfigureAwait(false);
+
+            foreach (var scene in performerResponse?.Data?.FindScenes?.Scenes ?? [])
+            {
+                AddCandidate(scene);
+            }
+        }
+
+        if (scored.Count < TargetScenes)
+        {
+            var tagNames = baseScene.Tags
+                .Select(t => t.Name)
+                .Where(name => !string.IsNullOrWhiteSpace(name))
+                .Take(TagFallbackCount)
+                .ToArray();
+
+            foreach (var tagName in tagNames)
+            {
+                ct.ThrowIfCancellationRequested();
+
+                var tagResponse = await SendAsync<GraphQlModels.SimilarFindScenesData>(
+                    SimilarScenesByTagQuery,
+                    new { name = tagName, limit = QueryLimit },
+                    ct).ConfigureAwait(false);
+
+                foreach (var scene in tagResponse?.Data?.FindScenes?.Scenes ?? [])
+                {
+                    AddCandidate(scene);
+                }
+
+                if (scored.Count >= TargetScenes)
+                {
+                    break;
+                }
+            }
+        }
+
+        var result = scored.Values
+            .OrderByDescending(x => x.Score)
+            .Take(TargetScenes)
+            .ToArray();
+
+        _logger.LogDebug(
+            "JFToStashSync: Stash Similar Scenes resolved {Count} candidates for sceneId={SceneId}",
+            result.Length,
+            baseSceneId);
+
+        return result;
+    }
+
     public async Task<string?> ResolveSceneIdAsync(BaseItem item, CancellationToken ct)
     {
         // 1) Prefer provider id
         if (item.ProviderIds is not null && item.ProviderIds.TryGetValue(ProviderIdKey, out var providerId) && !string.IsNullOrWhiteSpace(providerId))
         {
-            _logger.LogDebug("StashWatchSync: resolved scene via providerId. itemId={ItemId} sceneId={SceneId}", item.Id, providerId);
+            _logger.LogDebug("JFToStashSync: resolved scene via providerId. itemId={ItemId} sceneId={SceneId}", item.Id, providerId);
             return providerId;
         }
 
@@ -163,12 +523,12 @@ public sealed class StashClient
         var mappedPath = MapPath(item.Path, cfg.JellyfinPathPrefix, cfg.StashPathPrefix);
         if (string.IsNullOrWhiteSpace(mappedPath))
         {
-            _logger.LogDebug("StashWatchSync: cannot resolve scene by path (empty path). itemId={ItemId}", item.Id);
+            _logger.LogDebug("JFToStashSync: cannot resolve scene by path (empty path). itemId={ItemId}", item.Id);
             return null;
         }
 
         _logger.LogDebug(
-            "StashWatchSync: resolving scene by path. itemId={ItemId} mappedPath={MappedPath} fullPath={FullPath}",
+            "JFToStashSync: resolving scene by path. itemId={ItemId} mappedPath={MappedPath} fullPath={FullPath}",
             item.Id,
             mappedPath,
             cfg.SearchByFullPath);
@@ -204,6 +564,108 @@ public sealed class StashClient
 
 
     /// <summary>
+    /// Starts a normal Stash metadata scan for the parent folder of a Jellyfin video path,
+    /// then waits for the exact mapped file path to become visible as a Stash scene.
+    /// Used only by the manual scene-link workflow.
+    /// </summary>
+    public async Task<StashFolderScanResult> ScanParentFolderAndWaitForSceneAsync(
+        string? jellyfinFilePath,
+        CancellationToken ct)
+    {
+        var cfg = Plugin.Instance?.Configuration;
+        if (cfg is null || !cfg.Enabled)
+        {
+            return StashFolderScanResult.Fail("JF To Stash Sync is disabled.");
+        }
+
+        if (!TryMapPathForFolderScan(
+                jellyfinFilePath,
+                cfg.JellyfinPathPrefix,
+                cfg.StashPathPrefix,
+                out var mappedFilePath,
+                out var mapError))
+        {
+            return StashFolderScanResult.Fail(mapError);
+        }
+
+        var slash = mappedFilePath.LastIndexOf('/');
+        if (slash <= 0)
+        {
+            return StashFolderScanResult.Fail(
+                $"Could not determine the Stash parent folder for mapped path '{mappedFilePath}'.");
+        }
+
+        var scanPath = mappedFilePath.Substring(0, slash).TrimEnd('/');
+        if (string.IsNullOrWhiteSpace(scanPath))
+        {
+            return StashFolderScanResult.Fail("The mapped Stash parent folder is empty.");
+        }
+
+        var variables = new
+        {
+            input = new
+            {
+                paths = new[] { scanPath },
+                // This is a normal targeted scan. New files are discovered without forcing
+                // Stash to re-process every unchanged file already present in the folder.
+                rescan = false,
+            }
+        };
+
+        var response = await SendAsync<GraphQlModels.MetadataScanData>(
+            MetadataScanMutation,
+            variables,
+            ct).ConfigureAwait(false);
+
+        var jobId = response?.Data?.MetadataScan;
+        if (string.IsNullOrWhiteSpace(jobId))
+        {
+            return StashFolderScanResult.Fail(
+                $"Stash did not start a metadata scan for '{scanPath}'.",
+                mappedFilePath,
+                scanPath);
+        }
+
+        _logger.LogInformation(
+            "JFToStashSync: started targeted Stash folder scan. jobId={JobId} scanPath={ScanPath} mappedFile={MappedFile}",
+            jobId,
+            scanPath,
+            mappedFilePath);
+
+        // The scan mutation is asynchronous. Poll for the one exact file we care about rather
+        // than waiting for (or depending on) Stash's whole global job queue.
+        var deadline = DateTime.UtcNow.AddSeconds(60);
+        while (DateTime.UtcNow < deadline)
+        {
+            ct.ThrowIfCancellationRequested();
+
+            var sceneId = await FindSceneIdByPathAsync(mappedFilePath, true, ct).ConfigureAwait(false);
+            if (!string.IsNullOrWhiteSpace(sceneId))
+            {
+                _logger.LogInformation(
+                    "JFToStashSync: targeted Stash folder scan discovered the video. jobId={JobId} sceneId={SceneId} scanPath={ScanPath}",
+                    jobId,
+                    sceneId,
+                    scanPath);
+
+                return StashFolderScanResult.Found(jobId, mappedFilePath, scanPath, sceneId);
+            }
+
+            await Task.Delay(TimeSpan.FromSeconds(1), ct).ConfigureAwait(false);
+        }
+
+        _logger.LogWarning(
+            "JFToStashSync: targeted Stash folder scan was started, but the video did not appear within 60 seconds. jobId={JobId} scanPath={ScanPath} mappedFile={MappedFile}",
+            jobId,
+            scanPath,
+            mappedFilePath);
+
+        return StashFolderScanResult.StartedButNotFound(jobId, mappedFilePath, scanPath);
+    }
+
+
+
+    /// <summary>
     /// Sync played state to Stash.
     /// </summary>
     /// <param name="sceneId">Stash scene id</param>
@@ -227,7 +689,7 @@ public sealed class StashClient
             var incOk = await IncrementPlayCountAsync(sceneId, playCountDelta, ct).ConfigureAwait(false);
             if (!incOk)
             {
-                _logger.LogWarning("StashWatchSync: failed to increment play count in Stash. sceneId={SceneId} delta={Delta}", sceneId, playCountDelta);
+                _logger.LogWarning("JFToStashSync: failed to increment play count in Stash. sceneId={SceneId} delta={Delta}", sceneId, playCountDelta);
             }
         }
 
@@ -253,7 +715,7 @@ public sealed class StashClient
         if (newPlayDuration is not null)
         {
             _logger.LogInformation(
-                "StashWatchSync: scene activity updated. sceneId={SceneId} title=\"{Title}\" resume_time={Resume} play_duration {Before} -> {After} (+{Added})",
+                "JFToStashSync: scene activity updated. sceneId={SceneId} title=\"{Title}\" resume_time={Resume} play_duration {Before} -> {After} (+{Added})",
                 sceneId,
                 after?.Title ?? string.Empty,
                 after?.ResumeTime,
@@ -264,7 +726,7 @@ public sealed class StashClient
         else
         {
             _logger.LogInformation(
-                "StashWatchSync: scene activity updated. sceneId={SceneId} title=\"{Title}\" resume_time={Resume}",
+                "JFToStashSync: scene activity updated. sceneId={SceneId} title=\"{Title}\" resume_time={Resume}",
                 sceneId,
                 after?.Title ?? string.Empty,
                 after?.ResumeTime);
@@ -288,7 +750,7 @@ public sealed class StashClient
         if (response?.Errors is { Length: > 0 }
             || response?.Data?["sceneSaveActivity"]?.Value<bool>() != true)
         {
-            _logger.LogWarning("StashWatchSync: Stash rejected sceneSaveActivity. sceneId={SceneId} seconds={Seconds:F2}", sceneId, resumeSeconds);
+            _logger.LogWarning("JFToStashSync: Stash rejected sceneSaveActivity. sceneId={SceneId} seconds={Seconds:F2}", sceneId, resumeSeconds);
             return false;
         }
 
@@ -298,7 +760,7 @@ public sealed class StashClient
             if (saved?.ResumeTime is not double actual || Math.Abs(actual - resumeSeconds) > 1.0)
             {
                 _logger.LogWarning(
-                    "StashWatchSync: resume point verification failed. sceneId={SceneId} expected={Expected:F2} actual={Actual}",
+                    "JFToStashSync: resume point verification failed. sceneId={SceneId} expected={Expected:F2} actual={Actual}",
                     sceneId, resumeSeconds, saved?.ResumeTime);
                 return false;
             }
@@ -331,13 +793,13 @@ public sealed class StashClient
         var ok = await UpdateSceneAsync(sceneId, resumeTimeSeconds: null, playDurationSeconds: newPlayDuration, ct).ConfigureAwait(false);
         if (!ok)
         {
-            _logger.LogWarning("StashWatchSync: failed to update play_duration (in-progress). sceneId={SceneId} add={Add}", sceneId, addSeconds);
+            _logger.LogWarning("JFToStashSync: failed to update play_duration (in-progress). sceneId={SceneId} add={Add}", sceneId, addSeconds);
             return false;
         }
 
         var after = await GetSceneActivityAsync(sceneId, ct).ConfigureAwait(false);
         _logger.LogInformation(
-            "StashWatchSync: in-progress play_duration updated. sceneId={SceneId} title='{Title}' play_duration {Before} -> {After} (+{Added})",
+            "JFToStashSync: in-progress play_duration updated. sceneId={SceneId} title='{Title}' play_duration {Before} -> {After} (+{Added})",
             sceneId,
             after?.Title ?? string.Empty,
             current,
@@ -415,7 +877,7 @@ public sealed class StashClient
 
         // Never guess. A non-exact path/filename match could update the wrong Stash scene.
         _logger.LogWarning(
-            "StashWatchSync: path search returned candidates but none matched exactly. search={Search} fullPath={FullPath} candidates={Count}",
+            "JFToStashSync: path search returned candidates but none matched exactly. search={Search} fullPath={FullPath} candidates={Count}",
             search,
             fullPath,
             scenes.Count);
@@ -461,7 +923,7 @@ public sealed class StashClient
         if (updated is not null)
         {
             _logger.LogDebug(
-                "StashWatchSync: sceneUpdate response. sceneId={SceneId} title=\"{Title}\" resume={Resume}",
+                "JFToStashSync: sceneUpdate response. sceneId={SceneId} title=\"{Title}\" resume={Resume}",
                 updated.Id,
                 updated.Title ?? string.Empty,
                 updated.ResumeTime);
@@ -585,7 +1047,7 @@ public sealed class StashClient
         }
 
         _logger.LogInformation(
-            "StashWatchSync: Jellyfin URL synchronized. sceneId={SceneId} replaced={ReplacedCount} url={Url}",
+            "JFToStashSync: Jellyfin URL synchronized. sceneId={SceneId} replaced={ReplacedCount} url={Url}",
             sceneId,
             replacedCount,
             jellyfinUrl);
@@ -750,7 +1212,7 @@ public sealed class StashClient
         }
 
         _logger.LogInformation(
-            "StashWatchSync: Jellyfin performer URL synchronized. performerId={PerformerId} replaced={ReplacedCount} url={Url}",
+            "JFToStashSync: Jellyfin performer URL synchronized. performerId={PerformerId} replaced={ReplacedCount} url={Url}",
             performerId,
             replacedCount,
             jellyfinUrl);
@@ -764,10 +1226,56 @@ public sealed class StashClient
                 : "Jellyfin URL was added to the Stash performer.");
     }
 
-/// <summary>
-/// Set performer favorite state in Stash.
-/// </summary>
-public async Task<bool> SetPerformerFavoriteAsync(string performerId, bool isFavorite, CancellationToken ct)
+    /// <summary>
+    /// Increment the Stash scene O-counter by one. Uses sceneAddO so Stash also
+    /// records the timestamp in o_history. Returns the new counter value when available.
+    /// </summary>
+    public async Task<int?> IncrementOCounterAsync(string sceneId, CancellationToken ct)
+    {
+        var cfg = Plugin.Instance?.Configuration;
+        if (cfg is null || !cfg.Enabled || string.IsNullOrWhiteSpace(sceneId))
+        {
+            return null;
+        }
+
+        var response = await SendAsync<JObject>(
+            SceneAddOMutation,
+            new { id = sceneId },
+            ct).ConfigureAwait(false);
+
+        if (response?.Errors is not { Length: > 0 })
+        {
+            var countToken = response?.Data?["sceneAddO"]?["count"];
+            if (countToken is not null && countToken.Type != JTokenType.Null)
+            {
+                return countToken.Value<int>();
+            }
+        }
+
+        _logger.LogDebug(
+            "JFToStashSync: sceneAddO was unavailable or failed; trying legacy sceneIncrementO. sceneId={SceneId}",
+            sceneId);
+
+        var legacy = await SendAsync<JObject>(
+            SceneIncrementOMutation,
+            new { id = sceneId },
+            ct).ConfigureAwait(false);
+
+        if (legacy?.Errors is { Length: > 0 })
+        {
+            return null;
+        }
+
+        var legacyToken = legacy?.Data?["sceneIncrementO"];
+        return legacyToken is not null && legacyToken.Type != JTokenType.Null
+            ? legacyToken.Value<int>()
+            : null;
+    }
+
+    /// <summary>
+    /// Set performer favorite state in Stash.
+    /// </summary>
+    public async Task<bool> SetPerformerFavoriteAsync(string performerId, bool isFavorite, CancellationToken ct)
 {
     if (string.IsNullOrWhiteSpace(performerId))
     {
@@ -928,6 +1436,56 @@ private async Task<GraphQlModels.GraphQlResponse<T>?> SendAsync<T>(string query,
         return e + "/graphql";
     }
 
+    private static bool TryMapPathForFolderScan(
+        string? jellyfinPath,
+        string jellyfinPrefix,
+        string stashPrefix,
+        out string mappedPath,
+        out string error)
+    {
+        mappedPath = string.Empty;
+        error = string.Empty;
+
+        if (string.IsNullOrWhiteSpace(jellyfinPath))
+        {
+            error = "The Jellyfin video has no file path, so a Stash folder scan cannot be started.";
+            return false;
+        }
+
+        var p = NormalizePath(jellyfinPath);
+        var hasJellyfinPrefix = !string.IsNullOrWhiteSpace(jellyfinPrefix);
+        var hasStashPrefix = !string.IsNullOrWhiteSpace(stashPrefix);
+
+        if (hasJellyfinPrefix != hasStashPrefix)
+        {
+            error = "For Stash folder scanning, configure both Jellyfin path prefix and Stash path prefix, or leave both empty when the paths are identical.";
+            return false;
+        }
+
+        if (!hasJellyfinPrefix)
+        {
+            mappedPath = p;
+            return true;
+        }
+
+        var jp = NormalizePath(jellyfinPrefix).TrimEnd('/');
+        var sp = NormalizePath(stashPrefix).TrimEnd('/');
+        if (string.IsNullOrWhiteSpace(jp) || string.IsNullOrWhiteSpace(sp))
+        {
+            error = "Jellyfin/Stash path prefixes are invalid for folder scanning.";
+            return false;
+        }
+
+        if (!p.StartsWith(jp + "/", StringComparison.OrdinalIgnoreCase))
+        {
+            error = $"The Jellyfin file path '{p}' does not start with configured Jellyfin path prefix '{jp}'. Stash scan was not started.";
+            return false;
+        }
+
+        mappedPath = sp + p.Substring(jp.Length);
+        return true;
+    }
+
     private static string? MapPath(string? jellyfinPath, string jellyfinPrefix, string stashPrefix)
     {
         if (string.IsNullOrWhiteSpace(jellyfinPath))
@@ -1041,7 +1599,7 @@ private async Task<GraphQlModels.GraphQlResponse<T>?> SendAsync<T>(string query,
             return false;
         }
 
-        _logger.LogDebug("StashWatchSync: {Mutation} executed. sceneId={SceneId} delta={Delta}", spec.FieldName, sceneId, delta);
+        _logger.LogDebug("JFToStashSync: {Mutation} executed. sceneId={SceneId} delta={Delta}", spec.FieldName, sceneId, delta);
         return true;
     }
 
@@ -1296,3 +1854,63 @@ private async Task<GraphQlModels.GraphQlResponse<T>?> SendAsync<T>(string query,
         }
     }
 }
+
+public sealed class StashFolderScanResult
+{
+    public bool Started { get; init; }
+
+    public bool FoundScene { get; init; }
+
+    public string JobId { get; init; } = string.Empty;
+
+    public string MappedFilePath { get; init; } = string.Empty;
+
+    public string ScanPath { get; init; } = string.Empty;
+
+    public string SceneId { get; init; } = string.Empty;
+
+    public string Message { get; init; } = string.Empty;
+
+    public static StashFolderScanResult Fail(
+        string message,
+        string? mappedFilePath = null,
+        string? scanPath = null)
+        => new()
+        {
+            Started = false,
+            MappedFilePath = mappedFilePath ?? string.Empty,
+            ScanPath = scanPath ?? string.Empty,
+            Message = message,
+        };
+
+    public static StashFolderScanResult Found(
+        string jobId,
+        string mappedFilePath,
+        string scanPath,
+        string sceneId)
+        => new()
+        {
+            Started = true,
+            FoundScene = true,
+            JobId = jobId,
+            MappedFilePath = mappedFilePath,
+            ScanPath = scanPath,
+            SceneId = sceneId,
+            Message = $"Stash scan found scene {sceneId}.",
+        };
+
+    public static StashFolderScanResult StartedButNotFound(
+        string jobId,
+        string mappedFilePath,
+        string scanPath)
+        => new()
+        {
+            Started = true,
+            FoundScene = false,
+            JobId = jobId,
+            MappedFilePath = mappedFilePath,
+            ScanPath = scanPath,
+            Message = "Stash scan was started, but the video did not appear within 60 seconds.",
+        };
+}
+

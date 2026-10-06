@@ -4,9 +4,9 @@ using System.Threading;
 using System.Threading.Tasks;
 using MediaBrowser.Model.Tasks;
 using Microsoft.Extensions.Logging;
-using StashWatchSync.Services;
+using JFToStashSync.Services;
 
-namespace StashWatchSync.Tasks;
+namespace JFToStashSync.Tasks;
 
 /// <summary>
 /// Periodically synchronizes direct Jellyfin item URLs into Stash scene URLs.
@@ -43,7 +43,7 @@ public sealed class SyncJellyfinUrlsTask : IScheduledTask, IConfigurableSchedule
     public async Task ExecuteAsync(IProgress<double> progress, CancellationToken cancellationToken)
     {
         var result = await _syncService.SyncAllAsync(progress, cancellationToken).ConfigureAwait(false);
-        _logger.LogInformation("StashWatchSync: scheduled Jellyfin URL sync: {Message}", result.Message);
+        _logger.LogInformation("JFToStashSync: scheduled Jellyfin URL sync: {Message}", result.Message);
         progress.Report(100);
     }
 
