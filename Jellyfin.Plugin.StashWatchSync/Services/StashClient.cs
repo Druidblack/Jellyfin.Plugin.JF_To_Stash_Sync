@@ -23,9 +23,6 @@ public sealed class StashClient
 {
     private const string ProviderIdKey = "Stash";
 
-    // Lightweight Stash-specific query used by the settings-page connection test.
-    // __typename keeps the test compatible across Stash versions while still
-    // proving that the endpoint exposes Stash's `version` GraphQL field.
     private const string ConnectionTestQuery = @"query JFToStashSyncConnectionTest {
   version { __typename }
 }";
@@ -42,6 +39,16 @@ public sealed class StashClient
     }
   }
 }";
+
+    // Read-only, paged Stash scenes for the Jellyfin Person "Co-stars" tab.
+    // INCLUDES on a single Stash ID avoids the invalid ID criteria used in older plugins.
+    private const string CollaborationScenesQuery = @"query JFCoScenes($ids: [ID!], $page: Int!, $limit: Int!) {
+      findScenes(scene_filter: { performers: { value: $ids, modifier: INCLUDES } },
+                 filter: { page: $page, per_page: $limit }) {
+        count
+        scenes { id title date urls performers { id name gender image_path urls } }
+      }
+    }";
 
     private const string SimilarBaseSceneQuery = @"query JFToStashSyncSimilarBaseScene($id: ID!) {
   findScene(id: $id) {
@@ -1102,6 +1109,116 @@ public sealed class StashClient
         return true;
     }
 
+    private const string BabepediaLinkedPerformersQuery = @"query JFToStashBabepediaLinks($page: Int!, $limit: Int!) {
+  findPerformers(
+    filter: { page: $page, per_page: $limit },
+    performer_filter: { url: { value: ""babepedia.com"", modifier: INCLUDES } }
+  ) {
+    count
+    performers { id urls }
+  }
+}";
+
+    /// <summary>Read only performers containing a Babepedia URL, in bounded pages.</summary>
+    public async Task<(IReadOnlyList<JObject> Scenes, bool Truncated)> GetCollaborationScenesAsync(
+        string performerId, CancellationToken ct)
+    {
+        const int size = 200;
+        const int maxPages = 50; // hard ceiling: no unlimited Stash GraphQL pagination
+        var scenes = new List<JObject>();
+        for (var page = 1; page <= maxPages; page++)
+        {
+            ct.ThrowIfCancellationRequested();
+            var result = await SendAsync<JObject>(CollaborationScenesQuery,
+                new { ids = new[] { performerId }, page, limit = size }, ct).ConfigureAwait(false);
+            if (result is null || result.Errors is { Length: > 0 } ||
+                result.Data?["findScenes"] is not JObject found ||
+                found["scenes"] is not JArray rows)
+                throw new InvalidOperationException("Unable to load performer scenes from Stash.");
+            scenes.AddRange(rows.OfType<JObject>());
+            var total = (int?)found["count"] ?? scenes.Count;
+            if (rows.Count < size || scenes.Count >= total)
+                return (scenes, false);
+        }
+        return (scenes, true);
+    }
+
+    /// <summary>Proxy only Stash-origin images; never accept arbitrary client URLs.</summary>
+    public async Task<(byte[] Bytes, string ContentType)?> ReadCollaborationImageAsync(
+        string sourceImageUrl, CancellationToken ct)
+    {
+        var cfg = Plugin.Instance?.Configuration;
+        if (cfg is null || !cfg.Enabled || string.IsNullOrWhiteSpace(cfg.StashEndpoint)) return null;
+        var baseUri = new Uri(NormalizeGraphQlUrl(cfg.StashEndpoint));
+        if (!Uri.TryCreate(sourceImageUrl, UriKind.Absolute, out var provided) ||
+            (provided.Scheme != Uri.UriSchemeHttp && provided.Scheme != Uri.UriSchemeHttps) ||
+            !string.IsNullOrEmpty(provided.UserInfo) ||
+            !provided.AbsolutePath.Contains("/performer/", StringComparison.OrdinalIgnoreCase)) return null;
+        // GraphQL can return Stash's public host even when Jellyfin accesses the
+        // private container address. Use ONLY the configured Stash origin and the
+        // Stash-generated image path. Never forward the API key to the public URL.
+        var target = new Uri(baseUri.GetLeftPart(UriPartial.Authority) + provided.PathAndQuery);
+        using var handler = new HttpClientHandler { AllowAutoRedirect = false };
+        using var client = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(12) };
+        using var request = new HttpRequestMessage(HttpMethod.Get, target);
+        if (!string.IsNullOrWhiteSpace(cfg.StashApiKey)) request.Headers.TryAddWithoutValidation("ApiKey", cfg.StashApiKey);
+        using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
+        if (!response.IsSuccessStatusCode ||
+            response.Content.Headers.ContentLength is > 5_000_000 ||
+            response.Content.Headers.ContentType?.MediaType is not string mime ||
+            !mime.StartsWith("image/", StringComparison.OrdinalIgnoreCase)) return null;
+        using var stream = await response.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
+        using var memory = new MemoryStream();
+        var buffer = new byte[16384];
+        int n;
+        while ((n = await stream.ReadAsync(buffer, ct).ConfigureAwait(false)) > 0)
+        {
+            if (memory.Length + n > 5_000_000) return null;
+            memory.Write(buffer, 0, n);
+        }
+        return (memory.ToArray(), mime);
+    }
+
+    public async Task<IReadOnlyList<StashLinkedPerformer>> GetBabepediaLinkedPerformersAsync(CancellationToken ct)
+    {
+        const int pageSize = 250;
+        const int maxPages = 200;
+        var result = new List<StashLinkedPerformer>();
+        for (var page = 1; page <= maxPages; page++)
+        {
+            ct.ThrowIfCancellationRequested();
+            var response = await SendAsync<JObject>(BabepediaLinkedPerformersQuery,
+                new { page, limit = pageSize }, ct).ConfigureAwait(false);
+            if (response is null || response.Errors is { Length: > 0 } ||
+                response.Data?["findPerformers"] is not JObject payload ||
+                payload["performers"] is not JArray performers)
+                throw new InvalidOperationException("Stash performer URL search failed. Prepared Babepedia index was not overwritten.");
+            foreach (var performer in performers.OfType<JObject>())
+            {
+                var id = (string?)performer["id"];
+                if (string.IsNullOrWhiteSpace(id)) continue;
+                var urls = performer["urls"] is JArray links
+                    ? links.Values<string>().OfType<string>().Where(u => !string.IsNullOrWhiteSpace(u)).ToArray()
+                    : Array.Empty<string>();
+                result.Add(new StashLinkedPerformer(id, urls));
+            }
+            var count = (int?)payload["count"] ?? result.Count;
+            if (performers.Count < pageSize || result.Count >= count) return result;
+        }
+        throw new InvalidOperationException("Stash URL search exceeded safety paging limit.");
+    }
+
+    /// <summary>Read a Stash performer's existing external links without changing its metadata.</summary>
+    public async Task<IReadOnlyList<string>?> GetPerformerExternalUrlsAsync(string performerId, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(performerId)) return null;
+        var response = await SendAsync<GraphQlModels.FindPerformerUrlsData>(
+            FindPerformerUrlsQuery, new { id = performerId }, ct).ConfigureAwait(false);
+        if (response?.Errors is { Length: > 0 } || response?.Data?.FindPerformer is null)
+            return null;
+        return response.Data.FindPerformer.Urls ?? new List<string>();
+    }
+
     /// <summary>
     /// Adds or replaces the Jellyfin details URL for a Stash performer.
     /// All unrelated performer URLs are preserved. Existing Jellyfin details URLs
@@ -1914,3 +2031,5 @@ public sealed class StashFolderScanResult
         };
 }
 
+
+public sealed record StashLinkedPerformer(string StashId, IReadOnlyList<string> Urls);

@@ -402,35 +402,30 @@ public sealed class JellyfinUrlSyncService
             return JellyfinUrlSyncBatchResult.SkippedResult(urlError);
         }
 
-        // Query only non-folder, non-virtual library items and then keep Video instances.
-        // OfType<Video>() avoids hard-coding every individual Jellyfin video item kind.
-        var videos = _libraryManager.GetItemList(
-                new InternalItemsQuery
-                {
-                    Recursive = true,
-                    IsFolder = false,
-                    IsVirtualItem = false,
-                })
-            .OfType<Video>()
-            .Where(CanAttemptSceneResolution)
-            .ToArray();
-
-        var result = new JellyfinUrlSyncBatchResult
+        // Snapshot only GUIDs, not thousands of full Video objects. This is
+        // important because each item carries images, metadata and other state.
+        var itemIds = _libraryManager.GetItemIds(new InternalItemsQuery
         {
-            Total = videos.Length,
-        };
-
-        if (videos.Length == 0)
-        {
-            progress.Report(100);
-            result.Message = "No eligible Jellyfin videos were found.";
-            return result;
-        }
-
-        for (var i = 0; i < videos.Length; i++)
+            Recursive = true,
+            IsFolder = false,
+            IsVirtualItem = false,
+            EnableTotalRecordCount = false,
+            // If path fallback is disabled, the Stash provider index can
+            // restrict the query directly in Jellyfin's database.
+            HasAnyProviderId = cfg.EnablePathFallback ? null :
+                new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["Stash"] = string.Empty },
+        });
+        var result = new JellyfinUrlSyncBatchResult();
+        for (var i = 0; i < itemIds.Count; i++)
         {
             ct.ThrowIfCancellationRequested();
-            var video = videos[i];
+            if (_libraryManager.GetItemById(itemIds[i]) is not Video video ||
+                !CanAttemptSceneResolution(video))
+            {
+                progress.Report((i + 1) * 100d / itemIds.Count);
+                continue;
+            }
+            result.Total++;
 
             try
             {
@@ -470,7 +465,14 @@ public sealed class JellyfinUrlSyncService
                     video.Name);
             }
 
-            progress.Report((i + 1) * 100d / videos.Length);
+            progress.Report((i + 1) * 100d / itemIds.Count);
+        }
+
+        if (result.Total == 0)
+        {
+            progress.Report(100);
+            result.Message = "No eligible Jellyfin videos were found.";
+            return result;
         }
 
         result.Message =

@@ -18,6 +18,21 @@ public sealed class PluginServiceRegistrator : IPluginServiceRegistrator
     {
         // GraphQL client to talk to Stash.
         serviceCollection.AddSingleton<StashClient>();
+        serviceCollection.AddSingleton<StashCollaborationService>();
+
+        // Standalone StashDB Trending service with its own non-redirecting HTTP client.
+        serviceCollection.AddSingleton<StashDbTrendingService>();
+
+        // Persistent precomputed Trending index consumed by both scheduled task and HTTP API.
+        serviceCollection.AddSingleton<TrendingPreparedIndexService>();
+        serviceCollection.AddSingleton<PopularityPreparedIndexService>();
+        serviceCollection.AddSingleton<PerformerPopularityPreparedIndexService>();
+        serviceCollection.AddSingleton<BabepediaActorStatsService>();
+        serviceCollection.AddSingleton<PornhubActorArtworkService>();
+        serviceCollection.AddSingleton<PornhubActorStatsService>();
+        serviceCollection.AddSingleton<PornhubScheduledStateService>();
+        serviceCollection.AddSingleton<FeaturedBannerCandidateService>();
+        serviceCollection.AddSingleton<BabepediaTopPreparedIndexService>();
 
         // Direct Jellyfin-link synchronization used by the scheduled tasks and manual API.
         serviceCollection.AddSingleton<JellyfinUrlSyncService>();

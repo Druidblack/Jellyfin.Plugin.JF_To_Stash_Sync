@@ -1,296 +1,659 @@
 <!DOCTYPE html>
+
 <html>
 <head>
-    <title>JF To Stash Sync</title>
+<title>JF To Stash Sync</title>
 </head>
 <body>
-    <div id="ConfigurationPage" data-role="page" class="page type-interactive pluginConfigurationPage">
-        <div data-role="content">
-            <div class="content-primary">
-                <form id="jfToStashSyncConfigForm">
-                    <div class="verticalSection">
-                        <div class="sectionTitleContainer flex align-items-center">
-                            <h2 class="sectionTitle">JF To Stash Sync</h2>
-                        </div>
+<div class="page type-interactive pluginConfigurationPage" data-role="page" id="ConfigurationPage">
+<div data-role="content">
+<div class="content-primary">
+<form id="jfToStashSyncConfigForm">
+<div class="verticalSection">
+<div class="sectionTitleContainer flex align-items-center">
+<h2 class="sectionTitle" data-jf-i18n="s164">Connection to Stash</h2>
+</div>
+<div class="checkboxContainer checkboxContainer-withDescription">
+<label class="emby-checkbox-label">
+<input id="Enabled" type="checkbox" is="emby-checkbox" />
+<span data-jf-i18n="s1">Enable the plugin</span>
+</label>
+<div class="fieldDescription" data-jf-i18n="s2">Turn the plugin’s features on or off without losing your settings.</div>
+</div>
+<div class="inputContainer">
+<label class="inputLabel inputLabelUnfocused" data-jf-i18n="s3" for="StashEndpoint">Stash server address</label>
+<input id="StashEndpoint" is="emby-input" name="StashEndpoint" placeholder="http://192.168.1.201:9999" type="text"/>
+<div class="fieldDescription" data-jf-i18n="s4">Enter the address you normally use to open Stash.</div>
+</div>
+<div class="inputContainer">
+<label class="inputLabel inputLabelUnfocused" data-jf-i18n="s5" for="StashApiKey">Stash access key (if needed)</label>
+<input id="StashApiKey" is="emby-input" name="StashApiKey" type="password"/>
+<div class="fieldDescription" data-jf-i18n="s6">Only needed if Stash requires an access key.</div>
+</div>
+<div class="inputContainer">
+<button class="raised emby-button" id="TestStashConnection" is="emby-button" type="button">
+<span data-jf-i18n="s7">Check Stash connection</span>
+</button>
+<div class="fieldDescription" data-jf-i18n="s8" id="StashConnectionTestStatus">Checks that Jellyfin can reach your Stash server.</div>
+<div class="fieldDescription" data-jf-i18n="s212">Checks whether the Stash address and access key work.</div>
+</div>
+<h3 class="sectionTitle" data-jf-i18n="s165">Playback and favorites</h3>
+<div class="checkboxContainer checkboxContainer-withDescription">
+<label class="emby-checkbox-label">
+<input id="SyncPlayDuration" type="checkbox" is="emby-checkbox" />
+<span data-jf-i18n="s9">Sync watched time</span>
+</label>
+<div class="fieldDescription" data-jf-i18n="s10">Keep watched time in Stash up to date as you watch in Jellyfin.</div>
+</div>
+<div class="checkboxContainer checkboxContainer-withDescription">
+<label class="emby-checkbox-label">
+<input id="SyncResumePosition" type="checkbox" is="emby-checkbox" />
+<span data-jf-i18n="s11">Sync continue-watching position</span>
+</label>
+<div class="fieldDescription" data-jf-i18n="s12">Continue the same video in Stash from where you stopped in Jellyfin.</div>
+</div>
+<div class="inputContainer">
+<label class="inputLabel inputLabelUnfocused" data-jf-i18n="s13" for="ResumeUserId">Use playback position from this user only (optional)</label>
+<input data-jf-placeholder-i18n="ph212" id="ResumeUserId" is="emby-input" name="ResumeUserId" placeholder="Leave blank to use all allowed users" type="text"/>
+<div class="fieldDescription" data-jf-i18n="s14">Leave blank for all allowed users, or specify one Jellyfin user ID.</div>
+</div>
+<div class="inputContainer">
+<label class="inputLabel inputLabelUnfocused" data-jf-i18n="s15" for="MinResumeIntervalSeconds">Update position every (seconds)</label>
+<input id="MinResumeIntervalSeconds" is="emby-input" max="86400" min="0" step="1" type="number"/>
+<div class="fieldDescription" data-jf-i18n="s16">How often Jellyfin sends the playback position while a video is playing.</div>
+</div>
+<div class="inputContainer">
+<label class="inputLabel inputLabelUnfocused" data-jf-i18n="s17" for="MinResumeDeltaSeconds">Minimum change in position (seconds)</label>
+<input id="MinResumeDeltaSeconds" is="emby-input" max="86400" min="0" step="1" type="number"/>
+<div class="fieldDescription" data-jf-i18n="s18">Skip very small position changes.</div>
+</div>
+<div class="checkboxContainer checkboxContainer-withDescription">
+<label class="emby-checkbox-label">
+<input id="SyncPerformerFavorites" type="checkbox" is="emby-checkbox" />
+<span data-jf-i18n="s19">Sync favorite actors</span>
+</label>
+<div class="fieldDescription" data-jf-i18n="s20">Adding or removing an actor from Jellyfin Favorites also updates Stash.</div>
+</div>
+<div class="checkboxContainer checkboxContainer-withDescription">
+<label class="emby-checkbox-label">
+<input id="SyncFavoriteToRating" type="checkbox" is="emby-checkbox" />
+<span data-jf-i18n="s21">Sync favorite videos</span>
+</label>
+<div class="fieldDescription" data-jf-i18n="s22">Favorite videos in Jellyfin receive five stars in Stash; removing the favorite clears the rating.</div>
+</div>
+<h3 class="sectionTitle" data-jf-i18n="s166">Player and appearance</h3>
+<div class="checkboxContainer checkboxContainer-withDescription">
+<label class="emby-checkbox-label">
+<input id="EnablePlayerOCounterButton" type="checkbox" is="emby-checkbox" />
+<span data-jf-i18n="s23">Show O-counter in the player</span>
+</label>
+<div class="fieldDescription" data-jf-i18n="s24">Adds a button that increases the O-counter for the video in Stash.</div>
+</div>
+<div class="checkboxContainer checkboxContainer-withDescription">
+<label class="emby-checkbox-label">
+<input id="EnablePlayerActorListButton" type="checkbox" is="emby-checkbox" />
+<span data-jf-i18n="s25">Show actors button in the player</span>
+</label>
+<div class="fieldDescription" data-jf-i18n="s26">Opens a list of actors in the playing video, with portraits and favorite buttons.</div>
+</div>
+<div class="checkboxContainer checkboxContainer-withDescription">
+<label class="emby-checkbox-label">
+<input id="ShowActorGenderIcons" type="checkbox" is="emby-checkbox" />
+<span data-jf-i18n="s27">Show gender icons for actors</span>
+</label>
+<div class="fieldDescription" data-jf-i18n="s28">Show small gender icons on video and actor lists.</div>
+</div>
+<div class="checkboxContainer checkboxContainer-withDescription">
+<label class="emby-checkbox-label">
+<input id="HighlightActorPortraits" type="checkbox" is="emby-checkbox" />
+<span data-jf-i18n="s29">Highlight favorite actors</span>
+</label>
+<div class="fieldDescription" data-jf-i18n="s30">Favorite actors get a subtle red border around their portraits.</div>
+</div>
+<div class="checkboxContainer checkboxContainer-withDescription">
+<label class="emby-checkbox-label">
+<input id="HighlightRankedVideoStates" type="checkbox" is="emby-checkbox" />
+<span data-jf-i18n="s31">Highlight favorites and watched videos in rankings</span>
+</label>
+<div class="fieldDescription" data-jf-i18n="s32">Use colored outlines to distinguish favorites and watched videos in ranking rows.</div>
+</div>
+<div class="checkboxContainer checkboxContainer-withDescription">
+<label class="emby-checkbox-label">
+<input id="ShowRankedPerformerBirthFlags" type="checkbox" is="emby-checkbox" />
+<span data-jf-i18n="s33">Show country flags on actor portraits</span>
+</label>
+<div class="fieldDescription" data-jf-i18n="s34">Show the actor’s country flag when birthplace information is available.</div>
+</div>
+<h3 class="sectionTitle" data-jf-i18n="s167">Movie and series banner</h3>
+<div class="fieldDescription" data-jf-i18n="s182">The slideshow uses your Jellyfin movie and series images.</div>
+<div class="checkboxContainer checkboxContainer-withDescription">
+<label class="emby-checkbox-label">
+<input id="EnableFeaturedMediaBanner" type="checkbox" is="emby-checkbox" />
+<span data-jf-i18n="s35">Show movie and series banner</span>
+</label>
+</div>
+<div class="checkboxContainer checkboxContainer-withDescription">
+<label class="emby-checkbox-label">
+<input id="FeaturedMediaIncludeWatched" type="checkbox" is="emby-checkbox" />
+<span data-jf-i18n="s36">Include watched videos</span>
+</label>
+</div>
+<div class="checkboxContainer checkboxContainer-withDescription">
+<label class="emby-checkbox-label">
+<input id="FeaturedMediaRequireLogo" type="checkbox" is="emby-checkbox" />
+<span data-jf-i18n="s37">Show only videos with a logo</span>
+</label>
+</div>
+<div class="inputContainer"><label class="inputLabel inputLabelUnfocused" data-jf-i18n="s38" for="FeaturedMediaSortBy">Slide order</label>
+<select class="emby-select-withcolor emby-select" id="FeaturedMediaSortBy" is="emby-select">
+<option data-jf-i18n="s191" value="Random">Random</option><option data-jf-i18n="s192" value="DateCreated">Recently added</option><option data-jf-i18n="s193" value="PremiereDate">Newest releases</option><option data-jf-i18n="s194" value="CommunityRating">Highest rated</option><option data-jf-i18n="s195" value="SortName">Title A–Z</option>
+</select></div>
+<div class="inputContainer"><label class="inputLabel inputLabelUnfocused" data-jf-i18n="s39" for="FeaturedMediaSlideSeconds">Time per slide (seconds)</label><input id="FeaturedMediaSlideSeconds" is="emby-input" max="120" min="5" type="number"/></div>
+<div class="inputContainer"><label class="inputLabel inputLabelUnfocused" data-jf-i18n="s40" for="FeaturedMediaMaxItems">Maximum number of slides</label><input id="FeaturedMediaMaxItems" is="emby-input" max="100" min="1" type="number"/></div>
+<div class="inputContainer"><label class="inputLabel inputLabelUnfocused" data-jf-i18n="s41" for="FeaturedMediaLibraryIds">Video libraries (optional)</label><input id="FeaturedMediaLibraryIds" type="text" is="emby-input" /><div class="fieldDescription" data-jf-i18n="s42">Leave empty for all accessible libraries. To limit the slideshow, enter library IDs separated by commas.</div></div>
+<div class="checkboxContainer checkboxContainer-withDescription">
+<label class="emby-checkbox-label">
+<input id="FeaturedMediaShowOverview" type="checkbox" is="emby-checkbox" />
+<span data-jf-i18n="s43">Show description</span>
+</label>
+</div>
+<div class="checkboxContainer checkboxContainer-withDescription">
+<label class="emby-checkbox-label">
+<input id="FeaturedMediaShowRatings" type="checkbox" is="emby-checkbox" />
+<span data-jf-i18n="s44">Show year, rating and genres</span>
+</label>
+</div>
+<div class="checkboxContainer checkboxContainer-withDescription">
+<label class="emby-checkbox-label">
+<input id="FeaturedMediaShowProgress" type="checkbox" is="emby-checkbox" />
+<span data-jf-i18n="s45">Show slide progress</span>
+</label>
+</div>
+<div class="checkboxContainer checkboxContainer-withDescription">
+<label class="emby-checkbox-label">
+<input id="FeaturedMediaPauseOnHover" type="checkbox" is="emby-checkbox" />
+<span data-jf-i18n="s46">Pause when pointing at the banner</span>
+</label>
+</div>
+<h3 class="sectionTitle" data-jf-i18n="s168">Actor banner</h3>
+<div class="checkboxContainer checkboxContainer-withDescription">
+<label class="emby-checkbox-label"><input id="EnablePornhubFeaturedBanner" type="checkbox" is="emby-checkbox" />
+<span data-jf-i18n="s47">Show actor banner</span></label>
+<div class="fieldDescription" data-jf-i18n="s48">Shows actors with banner images in a slideshow on Home.</div>
+</div>
+<div class="inputContainer">
+<label class="inputLabel inputLabelUnfocused" data-jf-i18n="s49" for="FeaturedBannerSlideSeconds">Time per slide (seconds)</label>
+<input id="FeaturedBannerSlideSeconds" is="emby-input" max="120" min="5" step="1" type="number"/>
+<div class="fieldDescription" data-jf-i18n="s50">How long to show each slide before moving to the next.</div>
+</div>
+<div class="inputContainer">
+<label class="inputLabel inputLabelUnfocused" data-jf-i18n="s51" for="FeaturedBannerMaxItems">Maximum number of actors</label>
+<input id="FeaturedBannerMaxItems" is="emby-input" max="100" min="1" step="1" type="number"/>
+<div class="fieldDescription" data-jf-i18n="s52">Maximum number of actors in one slideshow.</div>
+</div>
+<div class="checkboxContainer checkboxContainer-withDescription">
+<label class="emby-checkbox-label">
+<input id="FeaturedBannerShowProgress" type="checkbox" is="emby-checkbox" />
+<span data-jf-i18n="s53">Show slide progress</span>
+</label>
+<div class="fieldDescription" data-jf-i18n="s54">Show how much time remains before the next slide.</div>
+</div>
+<div class="checkboxContainer checkboxContainer-withDescription">
+<label class="emby-checkbox-label">
+<input id="FeaturedBannerPauseOnHover" type="checkbox" is="emby-checkbox" />
+<span data-jf-i18n="s55">Pause when pointing at the banner</span>
+</label>
+<div class="fieldDescription" data-jf-i18n="s56">Keep the current slide visible while the mouse is over it.</div>
+</div>
+<div class="inputContainer">
+<label class="inputLabel" data-jf-i18n="s57" for="FeaturedBannerOrder">Actor order</label>
+<select class="emby-select-withcolor emby-select" id="FeaturedBannerOrder" is="emby-select">
+<option data-jf-i18n="s196" value="Random">Random</option>
+<option data-jf-i18n="s218" value="Ranked">By ranking — best first</option>
+</select>
+<div class="fieldDescription" data-jf-i18n="s58">Choose what appears on the actor banner.</div>
+</div>
+<div class="inputContainer">
+<label class="inputLabel" data-jf-i18n="s59" for="FeaturedBannerRankingSource">Choose ranking for sorting</label>
+<select class="emby-select-withcolor emby-select" id="FeaturedBannerRankingSource" is="emby-select">
+<option data-jf-i18n="s219" value="Pornhub">Pornhub — ranking position</option>
+<option data-jf-i18n="s220" value="Babepedia">Babepedia — highest rating first</option>
+</select>
+</div>
+<h4 class="sectionTitle">Data shown on the actor banner</h4>
+<div class="fieldDescription" data-jf-i18n="s213">Choose which rankings and numbers appear on the actor banner.</div>
+<div class="checkboxContainer">
+<label class="emby-checkbox-label"><input id="FeaturedBannerShowPornhubModelRank" type="checkbox" is="emby-checkbox" />
+<span data-jf-i18n="s60">Pornhub: overall position</span></label>
+</div>
+<div class="checkboxContainer">
+<label class="emby-checkbox-label"><input id="FeaturedBannerShowPornhubWeeklyRank" type="checkbox" is="emby-checkbox" />
+<span data-jf-i18n="s61">Pornhub: weekly position</span></label>
+</div>
+<div class="checkboxContainer">
+<label class="emby-checkbox-label"><input id="FeaturedBannerShowPornhubMonthlyRank" type="checkbox" is="emby-checkbox" />
+<span data-jf-i18n="s62">Pornhub: monthly position</span></label>
+</div>
+<div class="checkboxContainer">
+<label class="emby-checkbox-label"><input id="FeaturedBannerShowPornhubLastMonthRank" type="checkbox" is="emby-checkbox" />
+<span data-jf-i18n="s63">Pornhub: previous month position</span></label>
+</div>
+<div class="checkboxContainer">
+<label class="emby-checkbox-label"><input id="FeaturedBannerShowPornhubYearlyRank" type="checkbox" is="emby-checkbox" />
+<span data-jf-i18n="s64">Pornhub: yearly position</span></label>
+</div>
+<div class="checkboxContainer">
+<label class="emby-checkbox-label"><input id="FeaturedBannerShowPornhubVideoViews" type="checkbox" is="emby-checkbox" />
+<span data-jf-i18n="s65">Pornhub: video views</span></label>
+</div>
+<div class="checkboxContainer">
+<label class="emby-checkbox-label"><input id="FeaturedBannerShowPornhubSubscribers" type="checkbox" is="emby-checkbox" />
+<span data-jf-i18n="s66">Pornhub: subscribers</span></label>
+</div>
+<div class="checkboxContainer">
+<label class="emby-checkbox-label"><input id="FeaturedBannerShowBabepediaRating" type="checkbox" is="emby-checkbox" />
+<span data-jf-i18n="s67">Babepedia: rating</span></label>
+</div>
+<div class="checkboxContainer">
+<label class="emby-checkbox-label"><input id="FeaturedBannerShowBabepediaRank" type="checkbox" is="emby-checkbox" />
+<span data-jf-i18n="s68">Babepedia: ranking position</span></label>
+</div>
+<div class="checkboxContainer">
+<label class="emby-checkbox-label"><input id="FeaturedBannerShowBabepediaFavorites" type="checkbox" is="emby-checkbox" />
+<span data-jf-i18n="s69">Babepedia: favorites</span></label>
+</div>
+<div class="checkboxContainer">
+<label class="emby-checkbox-label"><input id="FeaturedBannerShowBabepediaVotes" type="checkbox" is="emby-checkbox" />
+<span data-jf-i18n="s70">Babepedia: votes</span></label>
+</div>
+<h3 class="sectionTitle" data-jf-i18n="s181">Actor pages</h3><div class="checkboxContainer checkboxContainer-withDescription">
+<label class="emby-checkbox-label">
+<input id="LinkifyPersonOverviewUrls" type="checkbox" is="emby-checkbox" />
+<span data-jf-i18n="s71">Make links in actor descriptions clickable</span>
+</label>
+<div class="fieldDescription" data-jf-i18n="s72">Web addresses in actor descriptions open when clicked.</div>
+</div>
+<div class="checkboxContainer checkboxContainer-withDescription">
+<label class="emby-checkbox-label"><input id="EnablePersonCoStarsTabs" type="checkbox" is="emby-checkbox" />
+<span data-jf-i18n="s73">Show Info and Co-stars tabs on actor pages</span></label>
+<div class="fieldDescription" data-jf-i18n="s74">Adds a Co-stars tab with actors who appeared in videos together.</div>
+</div>
+<div class="fieldDescription" data-jf-i18n="s183" style="margin:.7em 0 .5em;">Show co-stars of these genders:</div>
+<div class="checkboxContainer">
+<label class="emby-checkbox-label">
+<input id="CoStarsGenderFemale" type="checkbox" is="emby-checkbox" />
+<span data-jf-i18n="s75">Women</span>
+</label>
+</div>
+<div class="checkboxContainer">
+<label class="emby-checkbox-label">
+<input id="CoStarsGenderMale" type="checkbox" is="emby-checkbox" />
+<span data-jf-i18n="s76">Men</span>
+</label>
+</div>
+<div class="checkboxContainer">
+<label class="emby-checkbox-label">
+<input id="CoStarsGenderIntersex" type="checkbox" is="emby-checkbox" />
+<span data-jf-i18n="s77">Intersex</span>
+</label>
+</div>
+<div class="checkboxContainer">
+<label class="emby-checkbox-label">
+<input id="CoStarsGenderNonBinary" type="checkbox" is="emby-checkbox" />
+<span data-jf-i18n="s78">Non-binary</span>
+</label>
+</div>
+<div class="checkboxContainer">
+<label class="emby-checkbox-label">
+<input id="CoStarsGenderTransgenderFemale" type="checkbox" is="emby-checkbox" />
+<span data-jf-i18n="s79">Transgender women</span>
+</label>
+</div>
+<div class="checkboxContainer">
+<label class="emby-checkbox-label">
+<input id="CoStarsGenderTransgenderMale" type="checkbox" is="emby-checkbox" />
+<span data-jf-i18n="s80">Transgender men</span>
+</label>
+</div>
+<div class="checkboxContainer checkboxContainer-withDescription">
+<label class="emby-checkbox-label">
+<input id="ShowPersonSocialIcons" type="checkbox" is="emby-checkbox" />
+<span data-jf-i18n="s81">Show social-network links near actor names</span>
+</label>
+<div class="fieldDescription" data-jf-i18n="s82">Display convenient links to actors’ social and profile pages.</div>
+</div>
+<h3 class="sectionTitle" data-jf-i18n="s169">Home: trending videos</h3>
+<div class="checkboxContainer checkboxContainer-withDescription">
+<label class="emby-checkbox-label">
+<input id="EnableStashDbTrendingRow" type="checkbox" is="emby-checkbox" />
+<span data-jf-i18n="s83">Show trending videos on Home</span>
+</label>
+<div class="fieldDescription" data-jf-i18n="s84">Shows videos that are currently popular on StashDB and available in your library.</div>
+</div>
+<div class="selectContainer">
+<label class="inputLabel" data-jf-i18n="s85" for="StashDbTrendingLibraryId">Library for trending videos</label>
+<select class="emby-select-withcolor" id="StashDbTrendingLibraryId" is="emby-select">
+<option data-jf-i18n="s197" value="">All video libraries</option>
+</select>
+<div class="fieldDescription" data-jf-i18n="s86">Choose a library, or leave all libraries selected.</div>
+</div>
+<div class="inputContainer">
+<label class="inputLabel" data-jf-i18n="s87" for="StashDbTrendingPages">How many trending results to check</label>
+<input id="StashDbTrendingPages" is="emby-input" max="10" min="1" step="1" type="number"/>
+<div class="fieldDescription" data-jf-i18n="s88">Checking more results may find more matches, but takes longer.</div>
+</div>
+<div class="fieldDescription" data-jf-i18n="s184" style="margin: 1em 0 2em">After enabling this row, run its refresh task in Jellyfin Dashboard → Scheduled Tasks. Run it again if you change this row’s settings.</div>
+<h3 class="sectionTitle" data-jf-i18n="s170">Home: most popular videos</h3>
+<div class="checkboxContainer checkboxContainer-withDescription">
+<label class="emby-checkbox-label">
+<input id="EnableStashDbPopularityRow" type="checkbox" is="emby-checkbox" />
+<span data-jf-i18n="s89">Show all-time popular videos on Home</span>
+</label>
+<div class="fieldDescription" data-jf-i18n="s90">Shows widely popular StashDB videos that you already have.</div>
+</div>
+<div class="selectContainer">
+<label class="inputLabel" data-jf-i18n="s91" for="StashDbPopularityLibraryId">Library for popular videos</label>
+<select class="emby-select-withcolor" id="StashDbPopularityLibraryId" is="emby-select">
+<option data-jf-i18n="s198" value="">All video libraries</option>
+</select>
+<div class="fieldDescription" data-jf-i18n="s92">Choose a library, or leave all libraries selected.</div>
+</div>
+<div class="inputContainer">
+<label class="inputLabel" data-jf-i18n="s93" for="StashDbPopularityPages">How many popular results to check</label>
+<input id="StashDbPopularityPages" is="emby-input" max="10" min="1" step="1" type="number"/>
+<div class="fieldDescription" data-jf-i18n="s94">Checking more results may find more matches, but takes longer.</div>
+</div>
+<div class="fieldDescription" data-jf-i18n="s185" style="margin: 1em 0 2em">After enabling this row, run its refresh task in Jellyfin Dashboard → Scheduled Tasks. Run it again if you change this row’s settings.</div>
+<h3 class="sectionTitle" data-jf-i18n="s171">Home: popular actors</h3>
+<div class="checkboxContainer checkboxContainer-withDescription">
+<label class="emby-checkbox-label">
+<input id="EnableStashDbPerformerPopularityRows" type="checkbox" is="emby-checkbox" />
+<span data-jf-i18n="s95">Show popular actors on Home</span>
+</label>
+<div class="fieldDescription" data-jf-i18n="s96">Adds home-page rows of popular actors by selected groups.</div>
+</div>
+<div class="inputContainer">
+<label class="inputLabel" data-jf-i18n="s97" for="StashDbPerformerPopularityPages">How many actors to check per group</label>
+<input id="StashDbPerformerPopularityPages" is="emby-input" max="10" min="1" step="1" type="number"/>
+<div class="fieldDescription" data-jf-i18n="s98">Checking more results may find more matches, but takes longer.</div>
+</div>
+<div class="inputContainer">
+<label class="inputLabel" data-jf-i18n="s189">Actor groups to show</label>
+<div class="checkboxContainer"><label class="emby-checkbox-label"><input id="StashDbPerformerGenderFemale" type="checkbox" is="emby-checkbox" /><span data-jf-i18n="s99">Women</span></label></div>
+<div class="checkboxContainer"><label class="emby-checkbox-label"><input id="StashDbPerformerGenderIntersex" type="checkbox" is="emby-checkbox" /><span data-jf-i18n="s101">Intersex</span></label></div>
+<div class="checkboxContainer"><label class="emby-checkbox-label"><input id="StashDbPerformerGenderMale" type="checkbox" is="emby-checkbox" /><span data-jf-i18n="s100">Men</span></label></div>
+<div class="checkboxContainer"><label class="emby-checkbox-label"><input id="StashDbPerformerGenderNonBinary" type="checkbox" is="emby-checkbox" /><span data-jf-i18n="s102">Non-binary</span></label></div>
+<div class="checkboxContainer"><label class="emby-checkbox-label"><input id="StashDbPerformerGenderTransgenderFemale" type="checkbox" is="emby-checkbox" /><span data-jf-i18n="s103">Transgender women</span></label></div>
+<div class="checkboxContainer"><label class="emby-checkbox-label"><input id="StashDbPerformerGenderTransgenderMale" type="checkbox" is="emby-checkbox" /><span data-jf-i18n="s104">Transgender men</span></label></div>
+<div class="fieldDescription" data-jf-i18n="s186">Select at least one group to display its actor row.</div>
+</div>
+<div class="fieldDescription" data-jf-i18n="s187" style="margin: 1em 0 2em">After enabling this row, run its refresh task in Jellyfin Dashboard → Scheduled Tasks. Run it again if you change this row’s settings.</div>
+<h3 class="sectionTitle" data-jf-i18n="s172">Home: Babepedia Top 100</h3>
+<div class="checkboxContainer checkboxContainer-withDescription">
+<label class="emby-checkbox-label"><input id="EnableBabepediaTopRows" type="checkbox" is="emby-checkbox" /><span data-jf-i18n="s105">Show Babepedia Top 100 on Home</span></label>
+<div class="fieldDescription" data-jf-i18n="s106">Displays the selected Babepedia Top 100 lists on Home.</div>
+</div>
+<div class="inputContainer">
+<label class="inputLabel" data-jf-i18n="s107" for="BabepediaTopCacheDays">Update Babepedia Top 100 every</label>
+<select class="emby-select-withcolor emby-select" id="BabepediaTopCacheDays" is="emby-select">
+<option data-jf-i18n="s199" value="1">1 day</option><option data-jf-i18n="s200" value="7">7 days</option><option data-jf-i18n="s201" value="30">30 days</option>
+</select>
+<div class="fieldDescription" data-jf-i18n="s108">Choose how often saved information is checked for updates.</div>
+</div>
+<div class="checkboxContainer checkboxContainer-withDescription">
+<label class="emby-checkbox-label"><input id="BabepediaTopFallbackToJellyfinName" type="checkbox" is="emby-checkbox" /><span data-jf-i18n="s109">Search by actor name when no profile link exists</span></label>
+<div class="fieldDescription" data-jf-i18n="s110">Helps find more actors when a Babepedia profile link is missing.</div>
+</div>
+<div class="inputContainer">
+<label class="inputLabel" data-jf-i18n="s190">Babepedia lists to show</label>
+<div class="checkboxContainer"><label class="emby-checkbox-label"><input id="BabepediaTopPornstars" type="checkbox" is="emby-checkbox" /><span data-jf-i18n="s111">Performers</span></label></div>
+<div class="checkboxContainer"><label class="emby-checkbox-label"><input id="BabepediaTopMilf" type="checkbox" is="emby-checkbox" /><span data-jf-i18n="s112">MILF</span></label></div>
+<div class="checkboxContainer"><label class="emby-checkbox-label"><input id="BabepediaTopAsian" type="checkbox" is="emby-checkbox" /><span data-jf-i18n="s113">Asian</span></label></div>
+<div class="checkboxContainer"><label class="emby-checkbox-label"><input id="BabepediaTopLatina" type="checkbox" is="emby-checkbox" /><span data-jf-i18n="s114">Latina</span></label></div>
+<div class="checkboxContainer"><label class="emby-checkbox-label"><input id="BabepediaTopSlavic" type="checkbox" is="emby-checkbox" /><span data-jf-i18n="s115">Slavic</span></label></div>
+<div class="checkboxContainer"><label class="emby-checkbox-label"><input id="BabepediaTopEbony" type="checkbox" is="emby-checkbox" /><span data-jf-i18n="s116">Ebony</span></label></div>
+<div class="checkboxContainer"><label class="emby-checkbox-label"><input id="BabepediaTopCaucasian" type="checkbox" is="emby-checkbox" /><span data-jf-i18n="s117">Caucasian</span></label></div>
+<div class="checkboxContainer"><label class="emby-checkbox-label"><input id="BabepediaTopOnlyfans" type="checkbox" is="emby-checkbox" /><span data-jf-i18n="s118">OnlyFans</span></label></div>
+</div>
+<div class="fieldDescription" data-jf-i18n="s188" style="margin:1em 0 2em">After enabling this row, run its refresh task in Jellyfin Dashboard → Scheduled Tasks. Run it again if you change this row’s settings.</div>
+<h3 class="sectionTitle" data-jf-i18n="s173">Links between Jellyfin and Stash</h3>
+<div class="checkboxContainer checkboxContainer-withDescription">
+<label class="emby-checkbox-label">
+<input id="SyncJellyfinUrls" type="checkbox" is="emby-checkbox" />
+<span data-jf-i18n="s119">Add Jellyfin links to videos in Stash</span>
+</label>
+<div class="fieldDescription" data-jf-i18n="s120">Adds a link in Stash that opens the matching video in Jellyfin.</div>
+</div>
+<div class="checkboxContainer checkboxContainer-withDescription">
+<label class="emby-checkbox-label">
+<input id="SyncJellyfinPerformerUrls" type="checkbox" is="emby-checkbox" />
+<span data-jf-i18n="s121">Add Jellyfin links to actors in Stash</span>
+</label>
+<div class="fieldDescription" data-jf-i18n="s122">Adds a link in Stash that opens the actor in Jellyfin.</div>
+</div>
+<div class="inputContainer">
+<label class="inputLabel inputLabelUnfocused" data-jf-i18n="s123" for="JellyfinBaseUrl">Jellyfin address for links</label>
+<input id="JellyfinBaseUrl" is="emby-input" name="JellyfinBaseUrl" placeholder="http://192.168.1.201:3096" type="text"/>
+<div class="fieldDescription" data-jf-i18n="s124">Enter the address other devices should use to open Jellyfin.</div>
+</div>
+<div class="inputContainer">
+<label class="inputLabel inputLabelUnfocused" data-jf-i18n="s125" for="ManualJellyfinItemId">Video ID for manual linking</label>
+<input id="ManualJellyfinItemId" is="emby-input" name="ManualJellyfinItemId" placeholder="0aeba4bd52288ce9753e1c3d91cb135a" type="text"/>
+<div class="fieldDescription" data-jf-i18n="s126">Enter the Jellyfin ID of the item you want to check.</div>
+</div>
+<button class="raised emby-button" id="SyncJellyfinUrlNow" is="emby-button" type="button">
+<span data-jf-i18n="s205">Link video now</span>
+</button>
+<div class="fieldDescription" id="JellyfinUrlSyncStatus" style="margin-top: .7em;"></div>
+<div class="inputContainer" style="margin-top: 1.5em;">
+<label class="inputLabel inputLabelUnfocused" data-jf-i18n="s127" for="ManualJellyfinPersonId">Actor ID for manual linking</label>
+<input id="ManualJellyfinPersonId" is="emby-input" name="ManualJellyfinPersonId" placeholder="Jellyfin Person ID" type="text"/>
+<div class="fieldDescription" data-jf-i18n="s128">Enter the Jellyfin ID of the item you want to check.</div>
+</div>
+<button class="raised emby-button" id="SyncJellyfinPerformerUrlNow" is="emby-button" type="button">
+<span data-jf-i18n="s206">Link actor now</span>
+</button>
+<div class="fieldDescription" id="JellyfinPerformerUrlSyncStatus" style="margin-top: .7em;"></div>
+<h3 class="sectionTitle" data-jf-i18n="s174">Babepedia actor ratings</h3>
+<div class="checkboxContainer checkboxContainer-withDescription">
+<label class="emby-checkbox-label">
+<input id="EnableBabepediaActorStats" type="checkbox" is="emby-checkbox" />
+<span data-jf-i18n="s129">Show Babepedia ratings on actor pages</span>
+</label>
+<div class="fieldDescription" data-jf-i18n="s130">Show Babepedia ratings and rankings beside actor information.</div>
+</div>
+<div class="inputContainer">
+<label class="inputLabel inputLabelUnfocused" data-jf-i18n="s131" for="BabepediaCacheDays">Refresh Babepedia ratings every</label>
+<select class="emby-select-withcolor emby-select" id="BabepediaCacheDays" is="emby-select">
+<option data-jf-i18n="s202" value="1">1 day</option>
+<option data-jf-i18n="s221" value="7">1 week</option>
+<option data-jf-i18n="s222" value="30">1 month</option>
+</select>
+<div class="fieldDescription" data-jf-i18n="s132">Choose how often saved information is checked for updates.</div>
+</div>
+<div class="inputContainer">
+<label class="inputLabel inputLabelUnfocused" data-jf-i18n="s133" for="ManualBabepediaPersonId">Actor ID for manual check</label>
+<input id="ManualBabepediaPersonId" is="emby-input" placeholder="Jellyfin Person ID" type="text"/>
+<div class="fieldDescription" data-jf-i18n="s134">Enter the Jellyfin ID of the item you want to check.</div>
+</div>
+<button class="raised emby-button" id="FetchBabepediaActorNow" is="emby-button" type="button"><span data-jf-i18n="s207">Check Babepedia now</span></button>
+<div class="fieldDescription" id="BabepediaActorStatus" style="margin-top:.7em;white-space:pre-line"></div>
+<h3 class="sectionTitle" data-jf-i18n="s175">Pornhub: automatic updates</h3>
+<div class="fieldDescription" data-jf-i18n="s214" style="margin-bottom:.8em">Ratings update automatically. New actors are checked first, then outdated ratings.</div>
+<div class="checkboxContainer checkboxContainer-withDescription">
+<label class="emby-checkbox-label"><input id="PornhubScheduledFetchStats" type="checkbox" is="emby-checkbox" />
+<span data-jf-i18n="s135">Automatically update Pornhub ratings</span></label>
+<div class="fieldDescription" data-jf-i18n="s136">Keep actor rankings and statistics from Pornhub up to date automatically.</div>
+</div>
+<div class="checkboxContainer checkboxContainer-withDescription">
+<label class="emby-checkbox-label"><input id="PornhubScheduledFetchArtwork" type="checkbox" is="emby-checkbox" />
+<span data-jf-i18n="s137">Automatically download Pornhub actor images</span></label>
+<div class="fieldDescription" data-jf-i18n="s138">Find and save actor logos and banners from Pornhub.</div>
+</div>
+<div class="inputContainer">
+<label class="inputLabel" data-jf-i18n="s139" for="PornhubArtworkUpdateMode">When to download actor images</label>
+<select class="emby-select-withcolor emby-select" id="PornhubArtworkUpdateMode" is="emby-select">
+<option data-jf-i18n="s223" value="MissingOnly">Only missing images</option>
+<option data-jf-i18n="s224" value="AfterCacheExpiry">Missing or outdated images</option>
+</select>
+</div>
+<div class="inputContainer">
+<label class="inputLabel" data-jf-i18n="s140" for="PornhubArtworkCacheDays">Refresh images every</label>
+<select class="emby-select-withcolor emby-select" id="PornhubArtworkCacheDays" is="emby-select">
+<option data-jf-i18n="s203" value="1">1 day</option><option data-jf-i18n="s225" value="7">1 week</option><option data-jf-i18n="s226" value="30">1 month</option>
+</select>
+<div class="fieldDescription" data-jf-i18n="s141">Choose how often saved information is checked for updates.</div>
+</div>
+<h3 class="sectionTitle" data-jf-i18n="s176">Pornhub: manual profile check</h3>
+<div class="fieldDescription" data-jf-i18n="s215" style="margin-bottom:.8em">Enter an actor ID to check their ratings or images manually.</div>
+<div class="inputContainer">
+<label class="inputLabel" data-jf-i18n="s142" for="ManualPornhubPersonId">Actor ID for manual check</label>
+<input id="ManualPornhubPersonId" is="emby-input" placeholder="Jellyfin Person ID" type="text"/>
+</div>
+<h3 class="sectionTitle" data-jf-i18n="s177">Pornhub actor statistics</h3>
+<div class="checkboxContainer checkboxContainer-withDescription">
+<label class="emby-checkbox-label"><input id="EnablePornhubActorStats" type="checkbox" is="emby-checkbox" />
+<span data-jf-i18n="s143">Show Pornhub statistics on actor pages</span></label>
+<div class="fieldDescription" data-jf-i18n="s144">Show Pornhub rankings and statistics beside actor information.</div>
+</div>
+<div class="inputContainer">
+<label class="inputLabel" data-jf-i18n="s145" for="PornhubStatsCacheDays">Refresh Pornhub statistics every</label>
+<select class="emby-select-withcolor emby-select" id="PornhubStatsCacheDays" is="emby-select">
+<option data-jf-i18n="s204" value="1">1 day</option><option data-jf-i18n="s227" value="7">1 week</option><option data-jf-i18n="s228" value="30">1 month</option>
+</select>
+<div class="fieldDescription" data-jf-i18n="s146">Choose how often saved information is checked for updates.</div>
+</div>
+<div class="checkboxContainer">
+<label class="emby-checkbox-label"><input id="ForcePornhubStatsRefresh" type="checkbox" is="emby-checkbox" />
+<span data-jf-i18n="s147">Refresh even if recent data exists</span></label>
+</div>
+<button class="raised emby-button" id="FetchPornhubActorStats" is="emby-button" type="button"><span data-jf-i18n="s208">Check Pornhub now</span></button>
+<div class="fieldDescription" id="PornhubActorStatsStatus" style="margin-top:.7em;white-space:pre-line"></div>
+<h3 class="sectionTitle" data-jf-i18n="s178">Pornhub: actor images</h3>
+<div class="fieldDescription" data-jf-i18n="s216" style="margin-bottom:1em">Find images for one actor and choose which ones to save.</div>
+<button class="raised emby-button" id="InspectPornhubArtwork" is="emby-button" type="button">
+<span data-jf-i18n="s209">Find and preview images</span>
+</button>
+<div class="fieldDescription" id="PornhubArtworkStatus" style="margin-top:.8em;white-space:pre-line"></div>
+<div id="PornhubArtworkPreview" style="display:none;margin-top:1em">
+<div class="fieldDescription" id="PornhubArtworkProfile" style="white-space:pre-line;margin-bottom:.8em"></div>
+<div style="display:flex;flex-wrap:wrap;gap:20px;margin-bottom:1em">
+<div style="max-width:240px">
+<div class="inputLabel">Logo (avatar)</div>
+<img alt="Pornhub actor avatar" id="PornhubLogoPreview" style="display:none;max-width:100%;max-height:230px;object-fit:contain"/>
+<div class="checkboxContainer">
+<label class="emby-checkbox-label">
+<input id="PornhubSaveLogo" type="checkbox" is="emby-checkbox" /><span data-jf-i18n="s148">Save actor logo</span>
+</label>
+</div>
+</div>
+<div style="max-width:420px">
+<div class="inputLabel">Banner (cover)</div>
+<img alt="Pornhub actor banner" id="PornhubBannerPreview" style="display:none;max-width:100%;max-height:230px;object-fit:contain"/>
+<div class="checkboxContainer">
+<label class="emby-checkbox-label">
+<input id="PornhubSaveBanner" type="checkbox" is="emby-checkbox" /><span data-jf-i18n="s149">Save actor banner</span>
+</label>
+</div>
+</div>
+</div>
+<button class="raised emby-button" id="ApplyPornhubArtwork" is="emby-button" type="button">
+<span data-jf-i18n="s210">Save selected images</span>
+</button>
+<div class="fieldDescription" data-jf-i18n="s217" style="margin-top:.5em">The chosen images replace this actor’s current logo or banner. The main portrait is not changed.</div>
+</div>
+<h3 class="sectionTitle" data-jf-i18n="s179">Matching videos between apps</h3>
+<div class="checkboxContainer checkboxContainer-withDescription">
+<label class="emby-checkbox-label">
+<input id="ReplaceImagesOnStashMetadataRefresh" type="checkbox" is="emby-checkbox" />
+<span data-jf-i18n="s150">Replace images when updating video details</span>
+</label>
+<div class="fieldDescription" data-jf-i18n="s151">Replace existing video pictures when you refresh the details from Stash.</div>
+</div>
+<div class="checkboxContainer checkboxContainer-withDescription">
+<label class="emby-checkbox-label">
+<input id="ScanStashFolderOnManualSearchFailure" type="checkbox" is="emby-checkbox" />
+<span data-jf-i18n="s152">Look for missing videos in Stash again</span>
+</label>
+<div class="fieldDescription" data-jf-i18n="s153">If a video is not found, let Stash look in the matching folder and try again.</div>
+</div>
+<div class="checkboxContainer checkboxContainer-withDescription">
+<label class="emby-checkbox-label">
+<input id="EnablePathFallback" type="checkbox" is="emby-checkbox" />
+<span data-jf-i18n="s154">Find matching videos by file location</span>
+</label>
+<div class="fieldDescription" data-jf-i18n="s155">If two videos are not already linked, try finding them by file location.</div>
+</div>
+<div class="checkboxContainer checkboxContainer-withDescription">
+<label class="emby-checkbox-label">
+<input id="SearchByFullPath" type="checkbox" is="emby-checkbox" />
+<span data-jf-i18n="s156">Compare complete file paths</span>
+</label>
+<div class="fieldDescription" data-jf-i18n="s157">Use full folder locations instead of names only to avoid confusing similarly named files.</div>
+</div>
+<div class="inputContainer">
+<label class="inputLabel inputLabelUnfocused" data-jf-i18n="s158" for="JellyfinPathPrefix">Video folder path in Jellyfin</label>
+<input id="JellyfinPathPrefix" is="emby-input" name="JellyfinPathPrefix" placeholder="/mnt/media" type="text"/>
+<div class="fieldDescription" data-jf-i18n="s159">Only needed if Jellyfin and Stash show different folders for the same files.</div>
+</div>
+<div class="inputContainer">
+<label class="inputLabel inputLabelUnfocused" data-jf-i18n="s160" for="StashPathPrefix">Same folder path in Stash</label>
+<input id="StashPathPrefix" is="emby-input" name="StashPathPrefix" placeholder="/data" type="text"/>
+<div class="fieldDescription" data-jf-i18n="s161">Enter the matching folder used by Stash, or leave both folder fields empty.</div>
+</div>
+<h3 class="sectionTitle" data-jf-i18n="s180">Who to synchronize</h3>
+<div class="inputContainer">
+<label class="inputLabel inputLabelUnfocused" data-jf-i18n="s162" for="OnlyUserIdsCsv">Users to synchronize (optional)</label>
+<input data-jf-placeholder-i18n="ph213" id="OnlyUserIdsCsv" is="emby-input" name="OnlyUserIdsCsv" placeholder="Leave blank for everyone; or list user IDs" type="text"/>
+<div class="fieldDescription" data-jf-i18n="s163">Leave empty for everyone, or list Jellyfin user IDs separated by commas.</div>
+</div>
+<div aria-live="polite" class="fieldDescription" id="SettingsLoadStatus" role="alert" style="display:none;margin:.8em 0;"></div>
+<button class="raised button-submit block emby-button" disabled="" is="emby-button" type="submit">
+<span data-jf-i18n="s211">Save settings</span>
+</button>
+</div>
+</form>
+</div>
+</div>
+<script type="text/javascript">
+            // v1.2.0.61: UI translations use Jellyfin's current document language, not a separate plugin setting.
+            var jfSettingsUiTranslations = {"s1":["Enable the plugin","Включить плагин","text"],"s2":["Turn the plugin’s features on or off without losing your settings.","Включает и выключает функции плагина без удаления настроек.","text"],"s3":["Stash server address","Адрес сервера Stash","text"],"s4":["Enter the address you normally use to open Stash.","Укажите адрес, по которому вы открываете Stash.","text"],"s5":["Stash access key (if needed)","Ключ доступа Stash (если требуется)","text"],"s6":["Only needed if Stash requires an access key.","Нужен, только если Stash требует ключ доступа.","text"],"s7":["Check Stash connection","Проверить подключение к Stash","text"],"s8":["Checks that Jellyfin can reach your Stash server.","Проверяет, доступен ли сервер Stash из Jellyfin.","text"],"s9":["Sync watched time","Синхронизировать время просмотра","text"],"s10":["Keep watched time in Stash up to date as you watch in Jellyfin.","Передаёт в Stash время, проведённое за просмотром в Jellyfin.","text"],"s11":["Sync continue-watching position","Синхронизировать место остановки просмотра","text"],"s12":["Continue the same video in Stash from where you stopped in Jellyfin.","Позволяет продолжить просмотр в Stash с того же места, где вы остановились в Jellyfin.","text"],"s13":["Use playback position from this user only (optional)","Использовать позицию просмотра только этого пользователя (необязательно)","text"],"s14":["Leave blank for all allowed users, or specify one Jellyfin user ID.","Оставьте пустым для всех разрешённых пользователей или укажите ID одного пользователя Jellyfin.","text"],"s15":["Update position every (seconds)","Обновлять позицию не чаще чем раз в (секунд)","text"],"s16":["How often Jellyfin sends the playback position while a video is playing.","Как часто передавать текущую позицию во время просмотра.","text"],"s17":["Minimum change in position (seconds)","Минимальное изменение позиции (секунд)","text"],"s18":["Skip very small position changes.","Не передавать слишком маленькие изменения позиции.","text"],"s19":["Sync favorite actors","Синхронизировать избранных актёров","text"],"s20":["Adding or removing an actor from Jellyfin Favorites also updates Stash.","Добавление актёра в избранное Jellyfin или удаление из него обновляет Stash.","text"],"s21":["Sync favorite videos","Синхронизировать избранные видео","text"],"s22":["Favorite videos in Jellyfin receive five stars in Stash; removing the favorite clears the rating.","Избранные видео Jellyfin получают пять звёзд в Stash; удаление из избранного сбрасывает оценку.","text"],"s23":["Show O-counter in the player","Показывать O-счётчик в плеере","text"],"s24":["Adds a button that increases the O-counter for the video in Stash.","Добавляет кнопку увеличения O-счётчика видео в Stash.","text"],"s25":["Show actors button in the player","Показывать кнопку актёров в плеере","text"],"s26":["Opens a list of actors in the playing video, with portraits and favorite buttons.","Открывает список актёров текущего видео с портретами и кнопками избранного.","text"],"s27":["Show gender icons for actors","Показывать значки пола актёров","text"],"s28":["Show small gender icons on video and actor lists.","Добавляет небольшие значки пола в списки актёров и на страницы видео.","text"],"s29":["Highlight favorite actors","Выделять избранных актёров","text"],"s30":["Favorite actors get a subtle red border around their portraits.","Портреты избранных актёров выделяются нежно-красной рамкой.","text"],"s31":["Highlight favorites and watched videos in rankings","Выделять избранные и просмотренные видео в рейтингах","text"],"s32":["Use colored outlines to distinguish favorites and watched videos in ranking rows.","Выделяет избранные и просмотренные видео в строках рейтингов разными рамками.","text"],"s33":["Show country flags on actor portraits","Показывать флаги стран на портретах актёров","text"],"s34":["Show the actor’s country flag when birthplace information is available.","Показывает флаг страны актёра, если известно место его рождения.","text"],"s35":["Show movie and series banner","Показывать баннер фильмов и сериалов","text"],"s36":["Include watched videos","Включать просмотренные видео","text"],"s37":["Show only videos with a logo","Показывать только видео с логотипом","text"],"s38":["Slide order","Порядок показа","text"],"s39":["Time per slide (seconds)","Время показа слайда (секунд)","text"],"s40":["Maximum number of slides","Максимальное количество слайдов","text"],"s41":["Video libraries (optional)","Видеобиблиотеки (необязательно)","text"],"s42":["Leave empty for all accessible libraries. To limit the slideshow, enter library IDs separated by commas.","Оставьте поле пустым для всех доступных библиотек. Для ограничения укажите ID библиотек через запятую.","text"],"s43":["Show description","Показывать описание","text"],"s44":["Show year, rating and genres","Показывать год, рейтинг и жанры","text"],"s45":["Show slide progress","Показывать прогресс показа","text"],"s46":["Pause when pointing at the banner","Приостанавливать при наведении курсора","text"],"s47":["Show actor banner","Показывать баннер актёров","text"],"s48":["Shows actors with banner images in a slideshow on Home.","Показывает на главной странице слайд-шоу актёров, у которых есть баннеры.","text"],"s49":["Time per slide (seconds)","Время показа слайда (секунд)","text"],"s50":["How long to show each slide before moving to the next.","Как долго показывать каждый слайд перед переходом к следующему.","text"],"s51":["Maximum number of actors","Максимальное количество актёров","text"],"s52":["Maximum number of actors in one slideshow.","Сколько актёров может быть в одном слайд-шоу.","text"],"s53":["Show slide progress","Показывать прогресс показа","text"],"s54":["Show how much time remains before the next slide.","Показывает, сколько времени осталось до следующего слайда.","text"],"s55":["Pause when pointing at the banner","Приостанавливать при наведении курсора","text"],"s56":["Keep the current slide visible while the mouse is over it.","Оставляет текущий слайд на экране, пока на нём курсор.","text"],"s57":["Actor order","Порядок показа актёров","text"],"s58":["Choose what appears on the actor banner.","Выберите, что показывать на баннере актёров.","text"],"s59":["Choose ranking for sorting","Рейтинг для сортировки","text"],"s60":["Pornhub: overall position","Pornhub: место в общем рейтинге","text"],"s61":["Pornhub: weekly position","Pornhub: место за неделю","text"],"s62":["Pornhub: monthly position","Pornhub: место за месяц","text"],"s63":["Pornhub: previous month position","Pornhub: место за прошлый месяц","text"],"s64":["Pornhub: yearly position","Pornhub: место за год","text"],"s65":["Pornhub: video views","Pornhub: просмотры видео","text"],"s66":["Pornhub: subscribers","Pornhub: подписчики","text"],"s67":["Babepedia: rating","Babepedia: рейтинг","text"],"s68":["Babepedia: ranking position","Babepedia: место в рейтинге","text"],"s69":["Babepedia: favorites","Babepedia: добавления в избранное","text"],"s70":["Babepedia: votes","Babepedia: голоса","text"],"s71":["Make links in actor descriptions clickable","Сделать ссылки в описаниях актёров кликабельными","text"],"s72":["Web addresses in actor descriptions open when clicked.","Адреса сайтов в описаниях актёров становятся ссылками.","text"],"s73":["Show Info and Co-stars tabs on actor pages","Показывать вкладки «Информация» и «Совместно с»","text"],"s74":["Adds a Co-stars tab with actors who appeared in videos together.","Добавляет вкладку «Совместно с» со списком актёров, участвовавших в общих видео.","text"],"s75":["Women","Женщины","text"],"s76":["Men","Мужчины","text"],"s77":["Intersex","Интерсекс","text"],"s78":["Non-binary","Небинарные","text"],"s79":["Transgender women","Трансгендерные женщины","text"],"s80":["Transgender men","Трансгендерные мужчины","text"],"s81":["Show social-network links near actor names","Показывать ссылки на соцсети рядом с именами актёров","text"],"s82":["Display convenient links to actors’ social and profile pages.","Показывает значки со ссылками на социальные сети и профили актёров.","text"],"s83":["Show trending videos on Home","Показывать популярные сейчас видео на главной","text"],"s84":["Shows videos that are currently popular on StashDB and available in your library.","Показывает актуальные популярные видео StashDB, которые есть в вашей медиатеке.","text"],"s85":["Library for trending videos","Библиотека для актуальных видео","text"],"s86":["Choose a library, or leave all libraries selected.","Выберите библиотеку или оставьте все доступные библиотеки.","text"],"s87":["How many trending results to check","Сколько позиций актуального рейтинга проверять","text"],"s88":["Checking more results may find more matches, but takes longer.","Чем больше позиций проверяется, тем больше совпадений можно найти, но тем дольше длится обновление.","text"],"s89":["Show all-time popular videos on Home","Показывать самые популярные видео на главной","text"],"s90":["Shows widely popular StashDB videos that you already have.","Показывает самые популярные видео StashDB, которые уже есть в вашей медиатеке.","text"],"s91":["Library for popular videos","Библиотека для популярных видео","text"],"s92":["Choose a library, or leave all libraries selected.","Выберите библиотеку или оставьте все доступные библиотеки.","text"],"s93":["How many popular results to check","Сколько позиций общего рейтинга проверять","text"],"s94":["Checking more results may find more matches, but takes longer.","Чем больше позиций проверяется, тем больше совпадений можно найти, но тем дольше длится обновление.","text"],"s95":["Show popular actors on Home","Показывать популярных актёров на главной","text"],"s96":["Adds home-page rows of popular actors by selected groups.","Добавляет на главную страницу ряды популярных актёров по выбранным группам.","text"],"s97":["How many actors to check per group","Сколько актёров проверять для каждой группы","text"],"s98":["Checking more results may find more matches, but takes longer.","Чем больше позиций проверяется, тем больше совпадений можно найти, но тем дольше длится обновление.","text"],"s99":["Women","Женщины","text"],"s100":["Men","Мужчины","text"],"s101":["Intersex","Интерсекс","text"],"s102":["Non-binary","Небинарные","text"],"s103":["Transgender women","Трансгендерные женщины","text"],"s104":["Transgender men","Трансгендерные мужчины","text"],"s105":["Show Babepedia Top 100 on Home","Показывать топ-100 Babepedia на главной","text"],"s106":["Displays the selected Babepedia Top 100 lists on Home.","Показывает выбранные списки топ-100 Babepedia на главной странице.","text"],"s107":["Update Babepedia Top 100 every","Обновлять топ-100 Babepedia раз в","text"],"s108":["Choose how often saved information is checked for updates.","Выберите, как часто проверять сохранённые данные на обновления.","text"],"s109":["Search by actor name when no profile link exists","Искать по имени, если ссылки на профиль нет","text"],"s110":["Helps find more actors when a Babepedia profile link is missing.","Помогает находить больше актёров, когда ссылка на Babepedia отсутствует.","text"],"s111":["Pornstar","Pornstar","text"],"s112":["MILF","MILF","text"],"s113":["Asian","Азиатки","text"],"s114":["Latina","Латиноамериканки","text"],"s115":["Slavic","Славянки","text"],"s116":["Ebony","Темнокожие","text"],"s117":["Caucasian","Европейские","text"],"s118":["OnlyFans","OnlyFans","text"],"s119":["Add Jellyfin links to videos in Stash","Добавлять ссылки на Jellyfin к видео в Stash","text"],"s120":["Adds a link in Stash that opens the matching video in Jellyfin.","Добавляет в Stash ссылку для открытия соответствующего видео в Jellyfin.","text"],"s121":["Add Jellyfin links to actors in Stash","Добавлять ссылки на Jellyfin к актёрам в Stash","text"],"s122":["Adds a link in Stash that opens the actor in Jellyfin.","Добавляет в Stash ссылку для открытия актёра в Jellyfin.","text"],"s123":["Jellyfin address for links","Адрес Jellyfin для ссылок","text"],"s124":["Enter the address other devices should use to open Jellyfin.","Укажите адрес Jellyfin, доступный с других устройств.","text"],"s125":["Video ID for manual linking","ID видео для ручного связывания","text"],"s126":["Enter the Jellyfin ID of the item you want to check.","Укажите ID нужного элемента из Jellyfin.","text"],"s127":["Actor ID for manual linking","ID актёра для ручного связывания","text"],"s128":["Enter the Jellyfin ID of the item you want to check.","Укажите ID нужного элемента из Jellyfin.","text"],"s129":["Show Babepedia ratings on actor pages","Показывать рейтинги Babepedia на страницах актёров","text"],"s130":["Show Babepedia ratings and rankings beside actor information.","Показывает оценки и места в рейтингах Babepedia на странице актёра.","text"],"s131":["Refresh Babepedia ratings every","Обновлять рейтинги Babepedia раз в","text"],"s132":["Choose how often saved information is checked for updates.","Выберите, как часто проверять сохранённые данные на обновления.","text"],"s133":["Actor ID for manual check","ID актёра для ручной проверки","text"],"s134":["Enter the Jellyfin ID of the item you want to check.","Укажите ID нужного элемента из Jellyfin.","text"],"s135":["Automatically update Pornhub ratings","Автоматически обновлять рейтинги Pornhub","text"],"s136":["Keep actor rankings and statistics from Pornhub up to date automatically.","Автоматически обновляет рейтинги и статистику актёров Pornhub.","text"],"s137":["Automatically download Pornhub actor images","Автоматически загружать изображения актёров с Pornhub","text"],"s138":["Find and save actor logos and banners from Pornhub.","Находит и сохраняет логотипы и баннеры актёров с Pornhub.","text"],"s139":["When to download actor images","Когда загружать изображения актёров","text"],"s140":["Refresh images every","Обновлять изображения раз в","text"],"s141":["Choose how often saved information is checked for updates.","Выберите, как часто проверять сохранённые данные на обновления.","text"],"s142":["Actor ID for manual check","ID актёра для ручной проверки","text"],"s143":["Show Pornhub statistics on actor pages","Показывать статистику Pornhub на страницах актёров","text"],"s144":["Show Pornhub rankings and statistics beside actor information.","Показывает рейтинги и статистику Pornhub на странице актёра.","text"],"s145":["Refresh Pornhub statistics every","Обновлять статистику Pornhub раз в","text"],"s146":["Choose how often saved information is checked for updates.","Выберите, как часто проверять сохранённые данные на обновления.","text"],"s147":["Refresh even if recent data exists","Обновить, даже если данные ещё свежие","text"],"s148":["Save actor logo","Сохранить логотип актёра","text"],"s149":["Save actor banner","Сохранить баннер актёра","text"],"s150":["Replace images when updating video details","Заменять изображения при обновлении сведений о видео","text"],"s151":["Replace existing video pictures when you refresh the details from Stash.","Заменяет существующие изображения видео при обновлении информации из Stash.","text"],"s152":["Look for missing videos in Stash again","Повторно искать отсутствующие видео в Stash","text"],"s153":["If a video is not found, let Stash look in the matching folder and try again.","Если видео не найдено, разрешает Stash проверить папку и повторить поиск.","text"],"s154":["Find matching videos by file location","Искать совпадающие видео по расположению файла","text"],"s155":["If two videos are not already linked, try finding them by file location.","Если видео ещё не связаны, попробует найти совпадение по расположению файла.","text"],"s156":["Compare complete file paths","Сравнивать полные пути к файлам","text"],"s157":["Use full folder locations instead of names only to avoid confusing similarly named files.","Сравнивает не только имена файлов, но и папки, чтобы избежать ошибок при одинаковых названиях.","text"],"s158":["Video folder path in Jellyfin","Путь к папке видео в Jellyfin","text"],"s159":["Only needed if Jellyfin and Stash show different folders for the same files.","Нужно, только если Jellyfin и Stash используют разные пути к одним и тем же файлам.","text"],"s160":["Same folder path in Stash","Путь к той же папке в Stash","text"],"s161":["Enter the matching folder used by Stash, or leave both folder fields empty.","Укажите соответствующую папку Stash или оставьте оба поля пустыми.","text"],"s162":["Users to synchronize (optional)","Пользователи для синхронизации (необязательно)","text"],"s163":["Leave empty for everyone, or list Jellyfin user IDs separated by commas.","Оставьте пустым для всех или укажите ID пользователей Jellyfin через запятую.","text"],"s164":["Connection to Stash","Подключение к Stash","text"],"s165":["Playback and favorites","Просмотр и избранное","text"],"s166":["Player and appearance","Плеер и оформление","text"],"s167":["Movie and series banner","Баннер фильмов и сериалов","text"],"s168":["Actor banner","Баннер актёров","text"],"s169":["Home: trending videos","Главная: актуальные видео","text"],"s170":["Home: most popular videos","Главная: самые популярные видео","text"],"s171":["Home: popular actors","Главная: популярные актёры","text"],"s172":["Home: Babepedia Top 100","Главная: топ-100 Babepedia","text"],"s173":["Links between Jellyfin and Stash","Ссылки между Jellyfin и Stash","text"],"s174":["Babepedia actor ratings","Рейтинги актёров Babepedia","text"],"s175":["Pornhub: automatic updates","Pornhub: автоматическое обновление","text"],"s176":["Pornhub: manual profile check","Pornhub: ручная проверка профиля","text"],"s177":["Pornhub actor statistics","Статистика актёров Pornhub","text"],"s178":["Pornhub: actor images","Pornhub: изображения актёров","text"],"s179":["Matching videos between apps","Поиск совпадающих видео","text"],"s180":["Who to synchronize","Каких пользователей синхронизировать","text"],"s181":["Actor pages","Страницы актёров","text"],"s182":["The slideshow uses your Jellyfin movie and series images.","Слайд-шоу использует изображения фильмов и сериалов из вашей медиатеки Jellyfin.","text"],"s183":["Show co-stars of these genders:","Показывать партнёров по съёмкам следующих категорий:","text"],"s184":["After enabling this row, run its refresh task in Jellyfin Dashboard → Scheduled Tasks. Run it again if you change this row’s settings.","После включения запустите соответствующую задачу обновления в панели Jellyfin → Запланированные задачи. Повторите запуск после изменения настроек этого ряда.","text"],"s185":["After enabling this row, run its refresh task in Jellyfin Dashboard → Scheduled Tasks. Run it again if you change this row’s settings.","После включения запустите соответствующую задачу обновления в панели Jellyfin → Запланированные задачи. Повторите запуск после изменения настроек этого ряда.","text"],"s186":["Select at least one group to display its actor row.","Выберите хотя бы одну группу, чтобы увидеть соответствующий ряд актёров.","text"],"s187":["After enabling this row, run its refresh task in Jellyfin Dashboard → Scheduled Tasks. Run it again if you change this row’s settings.","После включения запустите соответствующую задачу обновления в панели Jellyfin → Запланированные задачи. Повторите запуск после изменения настроек этого ряда.","text"],"s188":["After enabling this row, run its refresh task in Jellyfin Dashboard → Scheduled Tasks. Run it again if you change this row’s settings.","После включения запустите соответствующую задачу обновления в панели Jellyfin → Запланированные задачи. Повторите запуск после изменения настроек этого ряда.","text"],"s189":["Actor groups to show","Какие группы актёров показывать","text"],"s190":["Babepedia lists to show","Какие списки Babepedia показывать","text"],"s191":["Random","Случайный","text"],"s192":["Recently added","Недавно добавленные","text"],"s193":["Newest releases","Новые релизы","text"],"s194":["Highest rated","С высоким рейтингом","text"],"s195":["Title A–Z","По названию А–Я","text"],"s196":["Random","Случайный","text"],"s197":["All video libraries","Все видеобиблиотеки","text"],"s198":["All video libraries","Все видеобиблиотеки","text"],"s199":["1 day","1 день","text"],"s200":["7 days","7 дней","text"],"s201":["30 days","30 дней","text"],"s202":["1 day","1 день","text"],"s203":["1 day","1 день","text"],"s204":["1 day","1 день","text"],"s205":["Link video now","Связать видео сейчас","text"],"s206":["Link actor now","Связать актёра сейчас","text"],"s207":["Check Babepedia now","Проверить Babepedia сейчас","text"],"s208":["Check Pornhub now","Проверить Pornhub сейчас","text"],"s209":["Find and preview images","Найти и просмотреть изображения","text"],"s210":["Save selected images","Сохранить выбранные изображения","text"],"s211":["Save settings","Сохранить настройки","text"],"ph212":["Leave blank to use all allowed users","Оставьте пустым для всех разрешённых пользователей","attr"],"ph213":["Leave blank for everyone; or list user IDs","Оставьте пустым для всех или введите ID через запятую","attr"],"s212":["Checks whether the Stash address and access key work.","Проверяет правильность адреса Stash и ключа доступа.","text"],"s213":["Choose which rankings and numbers appear on the actor banner.","Выберите, какие рейтинги и показатели показывать на баннере актёров.","text"],"s214":["Ratings update automatically. New actors are checked first, then outdated ratings.","Рейтинги обновляются автоматически. Сначала проверяются новые актёры, затем устаревшие данные.","text"],"s215":["Enter an actor ID to check their ratings or images manually.","Укажите ID актёра для ручной проверки рейтингов или изображений.","text"],"s216":["Find images for one actor and choose which ones to save.","Найдите изображения одного актёра и выберите, какие сохранить.","text"],"s217":["The chosen images replace this actor’s current logo or banner. The main portrait is not changed.","Выбранные изображения заменят логотип или баннер актёра. Основной портрет не изменится.","text"],"s218":["By ranking — best first","По рейтингу — лучшие сначала","text"],"s219":["Pornhub — ranking position","Pornhub — место в рейтинге","text"],"s220":["Babepedia — highest rating first","Babepedia — лучшие оценки сначала","text"],"s221":["1 week","1 неделя","text"],"s222":["1 month","1 месяц","text"],"s223":["Only missing images","Только отсутствующие изображения","text"],"s224":["Missing or outdated images","Отсутствующие и устаревшие изображения","text"],"s225":["1 week","1 неделя","text"],"s226":["1 month","1 месяц","text"],"s227":["1 week","1 неделя","text"],"s228":["1 month","1 месяц","text"]};
+            var jfSettingsMessages = {"Loading saved settings...":"Загрузка сохранённых настроек…","Could not load saved settings from Jellyfin. Do not save an empty form; reload this page and try again.":"Не удалось загрузить сохранённые настройки Jellyfin. Не сохраняйте пустую форму; обновите страницу.","Enter the Stash address first.":"Сначала укажите адрес Stash.","Testing connection to Stash...":"Проверка подключения к Stash…","Enter a Jellyfin video ID first.":"Сначала укажите ID видео Jellyfin.","Sending Jellyfin link to Stash...":"Передача ссылки на видео в Stash…","Enter a Jellyfin Person ID.":"Укажите ID актёра Jellyfin.","Checking saved data, Stash links and Babepedia...":"Проверка сохранённых данных и информации Babepedia…","Enter the Jellyfin Person ID in the Pornhub actor field below.":"Укажите ID актёра Jellyfin в поле ниже.","Checking cached statistics and Pornhub profile...":"Проверка статистики и профиля Pornhub…","Reading Stash links and checking Pornhub profile...":"Поиск изображений через Stash и Pornhub…","Review both images below, then save the selected image types. No images have been changed yet.":"Просмотрите найденные изображения и выберите, какие сохранить. Пока ничего не изменено.","Find and preview the actor first.":"Сначала найдите актёра и просмотрите изображения.","Select Logo and/or Banner.":"Выберите логотип и/или баннер.","Saving selected images to Jellyfin...":"Сохранение выбранных изображений в Jellyfin…","Images saved.":"Изображения сохранены.","Enter a Jellyfin actor ID first.":"Сначала укажите ID актёра Jellyfin.","Sending actor Jellyfin link to Stash...":"Передача ссылки на актёра в Stash…","Saved settings are not loaded; nothing was changed. Reload this page to retry.":"Настройки ещё не загружены, изменения не сохранены. Обновите страницу.","Error: ":"Ошибка: ","✓ ":"✓ ","All accessible video libraries":"Все доступные видеобиблиотеки","Previously selected library (":"Ранее выбранная библиотека (","Connection to Stash succeeded.":"Подключение к Stash успешно.","Could not connect to Stash.":"Не удалось подключиться к Stash.","Pornhub request failed (HTTP ":"Ошибка запроса Pornhub (HTTP ","Image preview could not be loaded (HTTP ":"Не удалось загрузить изображение (HTTP ","Actor ID changed. Preview the new actor first.":"ID актёра изменился. Сначала найдите нового актёра.","The actor Jellyfin link could not be synchronized.":"Не удалось синхронизировать ссылку на актёра Jellyfin.","Actor Jellyfin link synchronized.":"Ссылка на актёра Jellyfin синхронизирована.","Stash performer: ":"Актёр Stash: "};
+            function jfSettingsMsg(message) {
+                var key = String(message == null ? '' : message);
+                return jfSettingsLang() === 'ru' ? (jfSettingsMessages[key] || key) : key;
+            }
+            function jfSettingsLang() {
+                var lang = document.documentElement.getAttribute('lang') || navigator.language || 'en';
+                return /^ru(?:-|_|$)/i.test(lang) ? 'ru' : 'en';
+            }
+            function jfSettingsText(english, russian) { return jfSettingsLang() === 'ru' ? russian : english; }
+            function translateSettingsPage() {
+                var isRu = jfSettingsLang() === 'ru';
+                document.querySelectorAll('#ConfigurationPage [data-jf-i18n]').forEach(function (node) {
+                    var pair = jfSettingsUiTranslations[node.getAttribute('data-jf-i18n')];
+                    if (!pair) return;
+                    if (pair[2] === 'html') node.innerHTML = isRu ? pair[1] : pair[0];
+                    else node.textContent = isRu ? pair[1] : pair[0];
+                });
+                document.querySelectorAll('#ConfigurationPage [data-jf-placeholder-i18n]').forEach(function (node) {
+                    var pair = jfSettingsUiTranslations[node.getAttribute('data-jf-placeholder-i18n')];
+                    if (pair) node.placeholder = isRu ? pair[1] : pair[0];
+                });
+            }
 
-                        <div class="checkboxContainer checkboxContainer-withDescription">
-                            <label class="emby-checkbox-label">
-                                <input id="Enabled" type="checkbox" is="emby-checkbox" />
-                                <span>Enable synchronization</span>
-                            </label>
-                            <div class="fieldDescription">Turns all synchronization features of this plugin on or off.</div>
-                        </div>
 
-                        <div class="inputContainer">
-                            <label class="inputLabel inputLabelUnfocused" for="StashEndpoint">Stash address</label>
-                            <input id="StashEndpoint" name="StashEndpoint" type="text" is="emby-input" placeholder="http://192.168.1.201:9999" />
-                            <div class="fieldDescription">Enter the address you use to open Stash, for example <code>http://192.168.1.201:9999</code>.</div>
-                        </div>
-
-                        <div class="inputContainer">
-                            <label class="inputLabel inputLabelUnfocused" for="StashApiKey">Stash API key (optional)</label>
-                            <input id="StashApiKey" name="StashApiKey" type="password" is="emby-input" />
-                            <div class="fieldDescription">Enter a key only if your Stash server uses API authentication. You can create or copy it in Stash under Settings → Security → API Keys.</div>
-                        </div>
-
-                        <div class="inputContainer">
-                            <button id="TestStashConnection" is="emby-button" type="button" class="raised emby-button">
-                                <span>Test connection to Stash</span>
-                            </button>
-                            <div id="StashConnectionTestStatus" class="fieldDescription"></div>
-                            <div class="fieldDescription">
-                                Checks whether Jellyfin can connect to Stash using the address and API key entered above.
-                            </div>
-                        </div>
-
-                        <h3 class="sectionTitle">Synchronization</h3>
-
-                        <div class="checkboxContainer checkboxContainer-withDescription">
-                            <label class="emby-checkbox-label">
-                                <input id="SyncPlayDuration" type="checkbox" is="emby-checkbox" />
-                                <span>Watched time</span>
-                            </label>
-                            <div class="fieldDescription">Keeps the watched time in Stash up to date with how long videos are actually played in Jellyfin, including unfinished viewing.</div>
-                        </div>
-
-                        <div class="checkboxContainer checkboxContainer-withDescription">
-                            <label class="emby-checkbox-label">
-                                <input id="SyncResumePosition" type="checkbox" is="emby-checkbox" />
-                                <span>Continue watching position (Jellyfin → Stash)</span>
-                            </label>
-                            <div class="fieldDescription">
-                                Saves the current playback position from Jellyfin to Stash so you can continue the same video in Stash.
-                                Finished videos are not given a continue-watching position. Stash keeps one shared position for each video, so the most recent update is used.
-                            </div>
-                        </div>
-
-                        <div class="inputContainer">
-                            <label class="inputLabel inputLabelUnfocused" for="ResumeUserId">Use continue-watching position from one Jellyfin user only (optional)</label>
-                            <input id="ResumeUserId" name="ResumeUserId" type="text" is="emby-input" placeholder="Leave empty to use any allowed user" />
-                            <div class="fieldDescription">
-                                Enter one Jellyfin user ID if only that user's playback position should be sent to Stash.
-                                Leave this empty to accept updates from any user allowed in the Users section below. If several users watch the same video, Stash keeps the most recently received position.
-                            </div>
-                        </div>
-
-                        <div class="inputContainer">
-                            <label class="inputLabel inputLabelUnfocused" for="MinResumeIntervalSeconds">How often to update the position (seconds)</label>
-                            <input id="MinResumeIntervalSeconds" type="number" min="0" max="86400" step="1" is="emby-input" />
-                            <div class="fieldDescription">While a video is playing, the position is sent no more often than this. Default: 60 seconds. The final position is always sent when playback stops.</div>
-                        </div>
-
-                        <div class="inputContainer">
-                            <label class="inputLabel inputLabelUnfocused" for="MinResumeDeltaSeconds">Minimum position change to send (seconds)</label>
-                            <input id="MinResumeDeltaSeconds" type="number" min="0" max="86400" step="1" is="emby-input" />
-                            <div class="fieldDescription">Smaller position changes are ignored while the video is playing. Default: 20 seconds. The final position is always sent when playback stops.</div>
-                        </div>
-
-                        <div class="checkboxContainer checkboxContainer-withDescription">
-                            <label class="emby-checkbox-label">
-                                <input id="SyncPerformerFavorites" type="checkbox" is="emby-checkbox" />
-                                <span>Actor favorites</span>
-                            </label>
-                            <div class="fieldDescription">When you add or remove an actor from Favorites in Jellyfin, the matching performer in Stash is updated too. Actors that are not linked to Stash are skipped.</div>
-                        </div>
-
-                        <div class="checkboxContainer checkboxContainer-withDescription">
-                            <label class="emby-checkbox-label">
-                                <input id="SyncFavoriteToRating" type="checkbox" is="emby-checkbox" />
-                                <span>Favorite videos</span>
-                            </label>
-                            <div class="fieldDescription">When a video is added to Favorites in Jellyfin, the matching Stash scene is rated 5 stars. Removing it from Favorites sets the rating to 0.</div>
-                        </div>
-
-                        <h3 class="sectionTitle">Jellyfin Web</h3>
-
-                        <div class="checkboxContainer checkboxContainer-withDescription">
-                            <label class="emby-checkbox-label">
-                                <input id="EnablePlayerOCounterButton" type="checkbox" is="emby-checkbox" />
-                                <span>Show O-counter button in the Jellyfin Web player</span>
-                            </label>
-                            <div class="fieldDescription">
-                                Adds an O-counter button to the Jellyfin Web player. Each press adds 1 to the O counter of the matching video in Stash and records it in Stash history.
-                                Works in Jellyfin Web only. Requires <strong>File Transformation 3.x</strong>.
-                            </div>
-                        </div>
-
-                        <div class="checkboxContainer checkboxContainer-withDescription">
-                            <label class="emby-checkbox-label">
-                                <input id="EnablePlayerActorListButton" type="checkbox" is="emby-checkbox" />
-                                <span>Show actors button in the Jellyfin Web player</span>
-                            </label>
-                            <div class="fieldDescription">
-                                Adds an actors button to the Jellyfin Web player. Press it to open a list of actors from the current video, view their photos, and add or remove them from Jellyfin Favorites.
-                                Works in Jellyfin Web only and requires <strong>File Transformation 3.x</strong>.
-                            </div>
-                        </div>
-
-                        <div class="checkboxContainer checkboxContainer-withDescription">
-                            <label class="emby-checkbox-label">
-                                <input id="ShowActorGenderIcons" type="checkbox" is="emby-checkbox" />
-                                <span>Show gender icons for actors</span>
-                            </label>
-                            <div class="fieldDescription">
-                                Shows gender icons for actors on Jellyfin Web video pages and in the actors popup in the player. Supported gender labels are shown as icons; other role text is left unchanged.
-                                Works in Jellyfin Web only and requires <strong>File Transformation 3.x</strong>.
-                            </div>
-                        </div>
-
-                        <div class="checkboxContainer checkboxContainer-withDescription">
-                            <label class="emby-checkbox-label">
-                                <input id="LinkifyPersonOverviewUrls" type="checkbox" is="emby-checkbox" />
-                                <span>Make links in actor descriptions clickable</span>
-                            </label>
-                            <div class="fieldDescription">
-                                Turns web addresses written in an actor's description into clickable links that open in a new tab.
-                                Works in Jellyfin Web only and requires <strong>File Transformation 3.x</strong>.
-                            </div>
-                        </div>
-
-                        <div class="checkboxContainer checkboxContainer-withDescription">
-                            <label class="emby-checkbox-label">
-                                <input id="ShowPersonSocialIcons" type="checkbox" is="emby-checkbox" />
-                                <span>Show social icons next to actor names</span>
-                            </label>
-                            <div class="fieldDescription">
-                                If an actor's description contains supported social or profile links, Jellyfin Web shows convenient icons next to the actor's name. Clicking an icon opens that page in a new tab.
-                                Supports Instagram, OnlyFans, Patreon, Reddit, Telegram, TikTok, Tumblr, Twitch, VK, WordPress, X/Twitter, YouTube, Bluesky, Facebook and IMDb. Requires <strong>File Transformation 3.x</strong>.
-                            </div>
-                        </div>
-
-                        <h3 class="sectionTitle">Jellyfin links in Stash</h3>
-
-                        <div class="checkboxContainer checkboxContainer-withDescription">
-                            <label class="emby-checkbox-label">
-                                <input id="SyncJellyfinUrls" type="checkbox" is="emby-checkbox" />
-                                <span>Add Jellyfin links to Stash videos</span>
-                            </label>
-                            <div class="fieldDescription">
-                                Periodically adds a link back to the Jellyfin video page to matching scenes in Stash.
-                                You can change how often this runs in Jellyfin Dashboard → Scheduled Tasks.
-                            </div>
-                        </div>
-
-                        <div class="checkboxContainer checkboxContainer-withDescription">
-                            <label class="emby-checkbox-label">
-                                <input id="SyncJellyfinPerformerUrls" type="checkbox" is="emby-checkbox" />
-                                <span>Add Jellyfin links to Stash performers</span>
-                            </label>
-                            <div class="fieldDescription">
-                                Periodically adds a link back to the Jellyfin actor page to matching performers in Stash.
-                                Actors that are not already linked with Stash are skipped.
-                            </div>
-                        </div>
-
-                        <div class="inputContainer">
-                            <label class="inputLabel inputLabelUnfocused" for="JellyfinBaseUrl">Jellyfin address</label>
-                            <input id="JellyfinBaseUrl" name="JellyfinBaseUrl" type="text" is="emby-input" placeholder="http://192.168.1.201:3096" />
-                            <div class="fieldDescription">
-                                Enter the address you normally use to open Jellyfin, for example <code>http://192.168.1.201:8096</code> or <code>https://example.org/jellyfin</code>.
-                                This is the address that will be saved in Stash links.
-                            </div>
-                        </div>
-
-                        <div class="inputContainer">
-                            <label class="inputLabel inputLabelUnfocused" for="ManualJellyfinItemId">Send a link for one video</label>
-                            <input id="ManualJellyfinItemId" name="ManualJellyfinItemId" type="text" is="emby-input" placeholder="0aeba4bd52288ce9753e1c3d91cb135a" />
-                            <div class="fieldDescription">
-                                Enter a Jellyfin video ID to add its Jellyfin link to Stash immediately. This can be used even when automatic link synchronization is turned off.
-                            </div>
-                        </div>
-
-                        <button id="SyncJellyfinUrlNow" is="emby-button" type="button" class="raised emby-button">
-                            <span>Send Jellyfin link to Stash</span>
-                        </button>
-                        <div id="JellyfinUrlSyncStatus" class="fieldDescription" style="margin-top: .7em;"></div>
-
-                        <div class="inputContainer" style="margin-top: 1.5em;">
-                            <label class="inputLabel inputLabelUnfocused" for="ManualJellyfinPersonId">Send a link for one actor</label>
-                            <input id="ManualJellyfinPersonId" name="ManualJellyfinPersonId" type="text" is="emby-input" placeholder="Jellyfin Person ID" />
-                            <div class="fieldDescription">
-                                Enter a Jellyfin actor ID to add that actor's Jellyfin link to the matching Stash performer immediately. The actor must already be linked with Stash.
-                            </div>
-                        </div>
-
-                        <button id="SyncJellyfinPerformerUrlNow" is="emby-button" type="button" class="raised emby-button">
-                            <span>Send actor Jellyfin link to Stash</span>
-                        </button>
-                        <div id="JellyfinPerformerUrlSyncStatus" class="fieldDescription" style="margin-top: .7em;"></div>
-
-                        <h3 class="sectionTitle">Finding matching videos</h3>
-
-                        <div class="checkboxContainer checkboxContainer-withDescription">
-                            <label class="emby-checkbox-label">
-                                <input id="ReplaceImagesOnStashMetadataRefresh" type="checkbox" is="emby-checkbox" />
-                                <span>Replace images during manual Stash search</span>
-                            </label>
-                            <div class="fieldDescription">
-                                When manual Stash search refreshes Jellyfin metadata, also refresh and replace the video's images. Leave this off if you want to keep the existing artwork.
-                            </div>
-                        </div>
-
-                        <div class="checkboxContainer checkboxContainer-withDescription">
-                            <label class="emby-checkbox-label">
-                                <input id="ScanStashFolderOnManualSearchFailure" type="checkbox" is="emby-checkbox" />
-                                <span>Scan the Stash folder if manual search cannot find the video</span>
-                            </label>
-                            <div class="fieldDescription">
-                                If manual search still cannot find a video, ask Stash to scan the folder containing that file and try again automatically.
-                                The path settings below are used when Jellyfin and Stash see the same files under different folder paths.
-                            </div>
-                        </div>
-
-                        <div class="checkboxContainer checkboxContainer-withDescription">
-                            <label class="emby-checkbox-label">
-                                <input id="EnablePathFallback" type="checkbox" is="emby-checkbox" />
-                                <span>Find videos by file path when no direct match is available</span>
-                            </label>
-                            <div class="fieldDescription">Lets playback position, watched time, O-counter and automatic link synchronization find the matching Stash video using its file location when a direct link is not available.</div>
-                        </div>
-
-                        <div class="checkboxContainer checkboxContainer-withDescription">
-                            <label class="emby-checkbox-label">
-                                <input id="SearchByFullPath" type="checkbox" is="emby-checkbox" />
-                                <span>Use the full file path when searching</span>
-                            </label>
-                            <div class="fieldDescription">When enabled, Jellyfin and Stash file locations are compared using the full path. When disabled, only the filename is used. Full paths are safer when different folders can contain files with the same name.</div>
-                        </div>
-
-                        <div class="inputContainer">
-                            <label class="inputLabel inputLabelUnfocused" for="JellyfinPathPrefix">Jellyfin media path starts with</label>
-                            <input id="JellyfinPathPrefix" name="JellyfinPathPrefix" type="text" is="emby-input" placeholder="/mnt/media" />
-                            <div class="fieldDescription">Use this only if Jellyfin and Stash see the same media under different paths. Example: if Jellyfin sees <code>/mnt/media/Studio/video.mp4</code>, enter <code>/mnt/media</code>.</div>
-                        </div>
-
-                        <div class="inputContainer">
-                            <label class="inputLabel inputLabelUnfocused" for="StashPathPrefix">The same media path in Stash starts with</label>
-                            <input id="StashPathPrefix" name="StashPathPrefix" type="text" is="emby-input" placeholder="/data" />
-                            <div class="fieldDescription">Using the example above, if Stash sees the file as <code>/data/Studio/video.mp4</code>, enter <code>/data</code>. Leave both path fields empty when Jellyfin and Stash use the same paths.</div>
-                        </div>
-
-                        <h3 class="sectionTitle">Users</h3>
-
-                        <div class="inputContainer">
-                            <label class="inputLabel inputLabelUnfocused" for="OnlyUserIdsCsv">Users included in synchronization</label>
-                            <input id="OnlyUserIdsCsv" name="OnlyUserIdsCsv" type="text" is="emby-input" placeholder="Leave empty for all users, or enter user IDs separated by commas" />
-                            <div class="fieldDescription">
-                                Leave this empty to synchronize all Jellyfin users. To limit synchronization, enter one or more Jellyfin user IDs separated by commas.
-                                This affects playback, favorites, ratings and continue-watching position. Scheduled link tasks are not limited by this setting.
-                            </div>
-                        </div>
-
-                        <button is="emby-button" type="submit" class="raised button-submit block emby-button">
-                            <span>Save</span>
-                        </button>
-                    </div>
-                </form>
-            </div>
-        </div>
-
-        <script type="text/javascript">
             var pluginConfig = {
                 pluginUniqueId: '61db1999-72b9-4f58-ac15-25aedcabd583'
             };
+
+            // Prevent an unloaded/blank settings page from overwriting saved server settings.
+            var settingsLoaded = false;
+            function setSettingsReady(ready, message) {
+                settingsLoaded = !!ready;
+                $('#jfToStashSyncConfigForm button[type="submit"]').prop('disabled', !settingsLoaded);
+                $('#SettingsLoadStatus').text(message || '').toggle(!!message);
+            }
 
             function fillPageFromConfig(config) {
                 $('#Enabled').prop('checked', config.Enabled);
@@ -306,11 +669,85 @@
 
                 $('#SyncJellyfinUrls').prop('checked', config.SyncJellyfinUrls === true);
                 $('#SyncJellyfinPerformerUrls').prop('checked', config.SyncJellyfinPerformerUrls === true);
+                $('#EnableBabepediaTopRows').prop('checked', config.EnableBabepediaTopRows === true);
+                $('#BabepediaTopFallbackToJellyfinName').prop('checked', config.BabepediaTopFallbackToJellyfinName === true);
+                $('#BabepediaTopCacheDays').val([1,7,30].includes(config.BabepediaTopCacheDays) ? config.BabepediaTopCacheDays : 1);
+                $('#BabepediaTopPornstars').prop('checked', config.BabepediaTopPornstars !== false);
+                $('#BabepediaTopMilf').prop('checked', config.BabepediaTopMilf === true);
+                $('#BabepediaTopAsian').prop('checked', config.BabepediaTopAsian === true);
+                $('#BabepediaTopLatina').prop('checked', config.BabepediaTopLatina === true);
+                $('#BabepediaTopSlavic').prop('checked', config.BabepediaTopSlavic === true);
+                $('#BabepediaTopEbony').prop('checked', config.BabepediaTopEbony === true);
+                $('#BabepediaTopCaucasian').prop('checked', config.BabepediaTopCaucasian === true);
+                $('#BabepediaTopOnlyfans').prop('checked', config.BabepediaTopOnlyfans === true);
+                $('#EnableBabepediaActorStats').prop('checked', config.EnableBabepediaActorStats === true);
+                $('#PornhubScheduledFetchStats').prop('checked', config.PornhubScheduledFetchStats === true);
+                $('#PornhubScheduledFetchArtwork').prop('checked', config.PornhubScheduledFetchArtwork === true);
+                $('#PornhubArtworkUpdateMode').val(config.PornhubArtworkUpdateMode === 'AfterCacheExpiry' ? 'AfterCacheExpiry' : 'MissingOnly');
+                $('#PornhubArtworkCacheDays').val([1,7,30].includes(config.PornhubArtworkCacheDays) ? config.PornhubArtworkCacheDays : 7);
+                $('#EnablePornhubActorStats').prop('checked', config.EnablePornhubActorStats === true);
+                $('#EnableFeaturedMediaBanner').prop('checked', config.EnableFeaturedMediaBanner === true);
+                $('#FeaturedMediaIncludeWatched').prop('checked', config.FeaturedMediaIncludeWatched === true);
+                $('#FeaturedMediaRequireLogo').prop('checked', config.FeaturedMediaRequireLogo === true);
+                $('#FeaturedMediaShowOverview').prop('checked', config.FeaturedMediaShowOverview !== false);
+                $('#FeaturedMediaShowRatings').prop('checked', config.FeaturedMediaShowRatings !== false);
+                $('#FeaturedMediaShowProgress').prop('checked', config.FeaturedMediaShowProgress !== false);
+                $('#FeaturedMediaPauseOnHover').prop('checked', config.FeaturedMediaPauseOnHover === true);
+                $('#FeaturedMediaSortBy').val(['Random','DateCreated','PremiereDate','CommunityRating','SortName'].includes(config.FeaturedMediaSortBy) ? config.FeaturedMediaSortBy : 'Random');
+                $('#FeaturedMediaSlideSeconds').val(config.FeaturedMediaSlideSeconds || 15);
+                $('#FeaturedMediaMaxItems').val(config.FeaturedMediaMaxItems || 30);
+                $('#FeaturedMediaLibraryIds').val(config.FeaturedMediaLibraryIds || '');
+
+                $('#EnablePornhubFeaturedBanner').prop('checked', config.EnablePornhubFeaturedBanner === true);
+                $('#FeaturedBannerSlideSeconds').val(config.FeaturedBannerSlideSeconds ?? 15);
+                $('#FeaturedBannerMaxItems').val(config.FeaturedBannerMaxItems ?? 30);
+                $('#FeaturedBannerShowProgress').prop('checked', config.FeaturedBannerShowProgress !== false);
+                $('#FeaturedBannerPauseOnHover').prop('checked', config.FeaturedBannerPauseOnHover === true);
+                $('#FeaturedBannerOrder').val(config.FeaturedBannerOrder === 'Ranked' ? 'Ranked' : 'Random');
+                $('#FeaturedBannerRankingSource').val(config.FeaturedBannerRankingSource === 'Babepedia' ? 'Babepedia' : 'Pornhub');
+                $('#FeaturedBannerShowPornhubModelRank').prop('checked', config.FeaturedBannerShowPornhubModelRank !== false);
+                $('#FeaturedBannerShowPornhubWeeklyRank').prop('checked', config.FeaturedBannerShowPornhubWeeklyRank === true);
+                $('#FeaturedBannerShowPornhubMonthlyRank').prop('checked', config.FeaturedBannerShowPornhubMonthlyRank === true);
+                $('#FeaturedBannerShowPornhubLastMonthRank').prop('checked', config.FeaturedBannerShowPornhubLastMonthRank === true);
+                $('#FeaturedBannerShowPornhubYearlyRank').prop('checked', config.FeaturedBannerShowPornhubYearlyRank === true);
+                $('#FeaturedBannerShowPornhubVideoViews').prop('checked', config.FeaturedBannerShowPornhubVideoViews !== false);
+                $('#FeaturedBannerShowPornhubSubscribers').prop('checked', config.FeaturedBannerShowPornhubSubscribers !== false);
+                $('#FeaturedBannerShowBabepediaRating').prop('checked', config.FeaturedBannerShowBabepediaRating === true);
+                $('#FeaturedBannerShowBabepediaRank').prop('checked', config.FeaturedBannerShowBabepediaRank === true);
+                $('#FeaturedBannerShowBabepediaFavorites').prop('checked', config.FeaturedBannerShowBabepediaFavorites === true);
+                $('#FeaturedBannerShowBabepediaVotes').prop('checked', config.FeaturedBannerShowBabepediaVotes === true);
+                $('#PornhubStatsCacheDays').val([1,7,30].includes(config.PornhubStatsCacheDays) ? config.PornhubStatsCacheDays : 7);
+                $('#BabepediaCacheDays').val([1,7,30].includes(config.BabepediaCacheDays) ? config.BabepediaCacheDays : 7);
+                $('#EnableStashDbTrendingRow').prop('checked', config.EnableStashDbTrendingRow === true);
+                $('#StashDbTrendingPages').val(config.StashDbTrendingPages === undefined ? 5 : config.StashDbTrendingPages);
+                $('#StashDbTrendingLibraryId').val(config.StashDbTrendingLibraryId || '');
+                $('#EnableStashDbPopularityRow').prop('checked', config.EnableStashDbPopularityRow === true);
+                $('#StashDbPopularityPages').val(config.StashDbPopularityPages === undefined ? 5 : config.StashDbPopularityPages);
+                $('#StashDbPopularityLibraryId').val(config.StashDbPopularityLibraryId || '');
+                $('#EnableStashDbPerformerPopularityRows').prop('checked', config.EnableStashDbPerformerPopularityRows === true);
+                $('#StashDbPerformerPopularityPages').val(config.StashDbPerformerPopularityPages === undefined ? 5 : config.StashDbPerformerPopularityPages);
+                $('#StashDbPerformerGenderFemale').prop('checked', config.StashDbPerformerGenderFemale !== false);
+                $('#StashDbPerformerGenderIntersex').prop('checked', config.StashDbPerformerGenderIntersex === true);
+                $('#StashDbPerformerGenderMale').prop('checked', config.StashDbPerformerGenderMale === true);
+                $('#StashDbPerformerGenderNonBinary').prop('checked', config.StashDbPerformerGenderNonBinary === true);
+                $('#StashDbPerformerGenderTransgenderFemale').prop('checked', config.StashDbPerformerGenderTransgenderFemale === true);
+                $('#StashDbPerformerGenderTransgenderMale').prop('checked', config.StashDbPerformerGenderTransgenderMale === true);
                 $('#EnablePlayerOCounterButton').prop('checked', config.EnablePlayerOCounterButton !== false);
                 $('#EnablePlayerActorListButton').prop('checked', config.EnablePlayerActorListButton !== false);
                 $('#ShowActorGenderIcons').prop('checked', config.ShowActorGenderIcons === true);
+                $('#HighlightActorPortraits').prop('checked', config.HighlightActorPortraits === true);
+                $('#HighlightRankedVideoStates').prop('checked', config.HighlightRankedVideoStates === true);
+                $('#ShowRankedPerformerBirthFlags').prop('checked', config.ShowRankedPerformerBirthFlags === true);
                 $('#LinkifyPersonOverviewUrls').prop('checked', config.LinkifyPersonOverviewUrls === true);
                 $('#ShowPersonSocialIcons').prop('checked', config.ShowPersonSocialIcons === true);
+                $('#EnablePersonCoStarsTabs').prop('checked', config.EnablePersonCoStarsTabs === true);
+                $('#CoStarsGenderFemale').prop('checked', config.CoStarsGenderFemale !== false);
+                $('#CoStarsGenderMale').prop('checked', config.CoStarsGenderMale !== false);
+                $('#CoStarsGenderIntersex').prop('checked', config.CoStarsGenderIntersex !== false);
+                $('#CoStarsGenderNonBinary').prop('checked', config.CoStarsGenderNonBinary !== false);
+                $('#CoStarsGenderTransgenderFemale').prop('checked', config.CoStarsGenderTransgenderFemale !== false);
+                $('#CoStarsGenderTransgenderMale').prop('checked', config.CoStarsGenderTransgenderMale !== false);
+
                 $('#JellyfinBaseUrl').val(config.JellyfinBaseUrl || '').change();
 
                 $('#ReplaceImagesOnStashMetadataRefresh').prop('checked', config.ReplaceImagesOnStashMetadataRefresh === true);
@@ -337,11 +774,85 @@
 
                 config.SyncJellyfinUrls = $('#SyncJellyfinUrls').prop('checked');
                 config.SyncJellyfinPerformerUrls = $('#SyncJellyfinPerformerUrls').prop('checked');
+                config.EnableBabepediaTopRows = $('#EnableBabepediaTopRows').prop('checked');
+                config.BabepediaTopFallbackToJellyfinName = $('#BabepediaTopFallbackToJellyfinName').prop('checked');
+                config.BabepediaTopCacheDays = [1,7,30].includes(Number($('#BabepediaTopCacheDays').val())) ? Number($('#BabepediaTopCacheDays').val()) : 1;
+                config.BabepediaTopPornstars = $('#BabepediaTopPornstars').prop('checked');
+                config.BabepediaTopMilf = $('#BabepediaTopMilf').prop('checked');
+                config.BabepediaTopAsian = $('#BabepediaTopAsian').prop('checked');
+                config.BabepediaTopLatina = $('#BabepediaTopLatina').prop('checked');
+                config.BabepediaTopSlavic = $('#BabepediaTopSlavic').prop('checked');
+                config.BabepediaTopEbony = $('#BabepediaTopEbony').prop('checked');
+                config.BabepediaTopCaucasian = $('#BabepediaTopCaucasian').prop('checked');
+                config.BabepediaTopOnlyfans = $('#BabepediaTopOnlyfans').prop('checked');
+                config.EnableBabepediaActorStats = $('#EnableBabepediaActorStats').prop('checked');
+                config.PornhubScheduledFetchStats = $('#PornhubScheduledFetchStats').prop('checked');
+                config.PornhubScheduledFetchArtwork = $('#PornhubScheduledFetchArtwork').prop('checked');
+                config.PornhubArtworkUpdateMode = $('#PornhubArtworkUpdateMode').val() === 'AfterCacheExpiry' ? 'AfterCacheExpiry' : 'MissingOnly';
+                config.PornhubArtworkCacheDays = [1,7,30].includes(Number($('#PornhubArtworkCacheDays').val())) ? Number($('#PornhubArtworkCacheDays').val()) : 7;
+                config.EnablePornhubActorStats = $('#EnablePornhubActorStats').prop('checked');
+                config.EnableFeaturedMediaBanner = $('#EnableFeaturedMediaBanner').prop('checked');
+                config.FeaturedMediaIncludeWatched = $('#FeaturedMediaIncludeWatched').prop('checked');
+                config.FeaturedMediaRequireLogo = $('#FeaturedMediaRequireLogo').prop('checked');
+                config.FeaturedMediaShowOverview = $('#FeaturedMediaShowOverview').prop('checked');
+                config.FeaturedMediaShowRatings = $('#FeaturedMediaShowRatings').prop('checked');
+                config.FeaturedMediaShowProgress = $('#FeaturedMediaShowProgress').prop('checked');
+                config.FeaturedMediaPauseOnHover = $('#FeaturedMediaPauseOnHover').prop('checked');
+                config.FeaturedMediaSortBy = ['Random','DateCreated','PremiereDate','CommunityRating','SortName'].includes($('#FeaturedMediaSortBy').val()) ? $('#FeaturedMediaSortBy').val() : 'Random';
+                config.FeaturedMediaSlideSeconds = Math.max(5,Math.min(120,Number($('#FeaturedMediaSlideSeconds').val())||15));
+                config.FeaturedMediaMaxItems = Math.max(1,Math.min(100,Number($('#FeaturedMediaMaxItems').val())||30));
+                config.FeaturedMediaLibraryIds = ($('#FeaturedMediaLibraryIds').val()||'').trim();
+
+                config.EnablePornhubFeaturedBanner = $('#EnablePornhubFeaturedBanner').prop('checked');
+                config.FeaturedBannerSlideSeconds = Math.max(5,Math.min(120,Number($('#FeaturedBannerSlideSeconds').val())||15));
+                config.FeaturedBannerMaxItems = Math.max(1,Math.min(100,Number($('#FeaturedBannerMaxItems').val())||30));
+                config.FeaturedBannerShowProgress = $('#FeaturedBannerShowProgress').prop('checked');
+                config.FeaturedBannerPauseOnHover = $('#FeaturedBannerPauseOnHover').prop('checked');
+                config.FeaturedBannerOrder = $('#FeaturedBannerOrder').val() === 'Ranked' ? 'Ranked' : 'Random';
+                config.FeaturedBannerRankingSource = $('#FeaturedBannerRankingSource').val() === 'Babepedia' ? 'Babepedia' : 'Pornhub';
+                config.FeaturedBannerShowPornhubModelRank = $('#FeaturedBannerShowPornhubModelRank').prop('checked');
+                config.FeaturedBannerShowPornhubWeeklyRank = $('#FeaturedBannerShowPornhubWeeklyRank').prop('checked');
+                config.FeaturedBannerShowPornhubMonthlyRank = $('#FeaturedBannerShowPornhubMonthlyRank').prop('checked');
+                config.FeaturedBannerShowPornhubLastMonthRank = $('#FeaturedBannerShowPornhubLastMonthRank').prop('checked');
+                config.FeaturedBannerShowPornhubYearlyRank = $('#FeaturedBannerShowPornhubYearlyRank').prop('checked');
+                config.FeaturedBannerShowPornhubVideoViews = $('#FeaturedBannerShowPornhubVideoViews').prop('checked');
+                config.FeaturedBannerShowPornhubSubscribers = $('#FeaturedBannerShowPornhubSubscribers').prop('checked');
+                config.FeaturedBannerShowBabepediaRating = $('#FeaturedBannerShowBabepediaRating').prop('checked');
+                config.FeaturedBannerShowBabepediaRank = $('#FeaturedBannerShowBabepediaRank').prop('checked');
+                config.FeaturedBannerShowBabepediaFavorites = $('#FeaturedBannerShowBabepediaFavorites').prop('checked');
+                config.FeaturedBannerShowBabepediaVotes = $('#FeaturedBannerShowBabepediaVotes').prop('checked');
+                config.PornhubStatsCacheDays = [1,7,30].includes(Number($('#PornhubStatsCacheDays').val())) ? Number($('#PornhubStatsCacheDays').val()) : 7;
+                config.BabepediaCacheDays = [1,7,30].includes(Number($('#BabepediaCacheDays').val())) ? Number($('#BabepediaCacheDays').val()) : 7;
+                config.EnableStashDbTrendingRow = $('#EnableStashDbTrendingRow').prop('checked');
+                config.StashDbTrendingLibraryId = $('#StashDbTrendingLibraryId').val() || '';
+                config.StashDbTrendingPages = Math.max(1, Math.min(10, parseInt($('#StashDbTrendingPages').val(), 10) || 5));
+                config.EnableStashDbPopularityRow = $('#EnableStashDbPopularityRow').prop('checked');
+                config.StashDbPopularityLibraryId = $('#StashDbPopularityLibraryId').val() || '';
+                config.StashDbPopularityPages = Math.max(1, Math.min(10, parseInt($('#StashDbPopularityPages').val(), 10) || 5));
+                config.EnableStashDbPerformerPopularityRows = $('#EnableStashDbPerformerPopularityRows').prop('checked');
+                config.StashDbPerformerPopularityPages = Math.max(1, Math.min(10, parseInt($('#StashDbPerformerPopularityPages').val(), 10) || 5));
+                config.StashDbPerformerGenderFemale = $('#StashDbPerformerGenderFemale').prop('checked');
+                config.StashDbPerformerGenderIntersex = $('#StashDbPerformerGenderIntersex').prop('checked');
+                config.StashDbPerformerGenderMale = $('#StashDbPerformerGenderMale').prop('checked');
+                config.StashDbPerformerGenderNonBinary = $('#StashDbPerformerGenderNonBinary').prop('checked');
+                config.StashDbPerformerGenderTransgenderFemale = $('#StashDbPerformerGenderTransgenderFemale').prop('checked');
+                config.StashDbPerformerGenderTransgenderMale = $('#StashDbPerformerGenderTransgenderMale').prop('checked');
                 config.EnablePlayerOCounterButton = $('#EnablePlayerOCounterButton').prop('checked');
                 config.EnablePlayerActorListButton = $('#EnablePlayerActorListButton').prop('checked');
                 config.ShowActorGenderIcons = $('#ShowActorGenderIcons').prop('checked');
+                config.HighlightActorPortraits = $('#HighlightActorPortraits').prop('checked');
+                config.HighlightRankedVideoStates = $('#HighlightRankedVideoStates').prop('checked');
+                config.ShowRankedPerformerBirthFlags = $('#ShowRankedPerformerBirthFlags').prop('checked');
                 config.LinkifyPersonOverviewUrls = $('#LinkifyPersonOverviewUrls').prop('checked');
                 config.ShowPersonSocialIcons = $('#ShowPersonSocialIcons').prop('checked');
+                config.EnablePersonCoStarsTabs = $('#EnablePersonCoStarsTabs').prop('checked');
+                config.CoStarsGenderFemale = $('#CoStarsGenderFemale').prop('checked');
+                config.CoStarsGenderMale = $('#CoStarsGenderMale').prop('checked');
+                config.CoStarsGenderIntersex = $('#CoStarsGenderIntersex').prop('checked');
+                config.CoStarsGenderNonBinary = $('#CoStarsGenderNonBinary').prop('checked');
+                config.CoStarsGenderTransgenderFemale = $('#CoStarsGenderTransgenderFemale').prop('checked');
+                config.CoStarsGenderTransgenderMale = $('#CoStarsGenderTransgenderMale').prop('checked');
+
                 config.JellyfinBaseUrl = $('#JellyfinBaseUrl').val();
 
                 config.ReplaceImagesOnStashMetadataRefresh = $('#ReplaceImagesOnStashMetadataRefresh').prop('checked');
@@ -356,6 +867,9 @@
             }
 
             function saveCurrentPageConfig() {
+                if (!settingsLoaded) {
+                    return Promise.reject(new Error('Settings have not finished loading. Reload the page before saving.'));
+                }
                 return ApiClient.getPluginConfiguration(pluginConfig.pluginUniqueId).then(function (config) {
                     applyPageToConfig(config);
                     return ApiClient.updatePluginConfiguration(pluginConfig.pluginUniqueId, config);
@@ -370,16 +884,78 @@
                 return result ? result[pascalName] : undefined;
             }
 
+            // Populate the library selector using the current user's Jellyfin views.
+            // Keep the saved value even if the admin cannot currently list its library.
+            async function populateTrendingLibraries(selected) {
+                var select = $('#StashDbTrendingLibraryId');
+                select.empty().append($('<option>').val('').text(jfSettingsMsg('All accessible video libraries')));
+                try {
+                    var uid = ApiClient.getCurrentUserId();
+                    var response = await ApiClient.fetch({
+                        url: ApiClient.getUrl('Users/' + encodeURIComponent(uid) + '/Views'), type: 'GET'
+                    });
+                    if (!response.ok) throw new Error('HTTP ' + response.status);
+                    var payload = await response.json();
+                    var views = payload.Items || payload.items || [];
+                    views.forEach(function (view) {
+                        var kind = String(view.CollectionType || view.collectionType || '').toLowerCase();
+                        if (['movies', 'homevideos', 'mixed', 'tvshows'].indexOf(kind) < 0) return;
+                        var id = view.Id || view.id;
+                        if (id) select.append($('<option>').val(id).text(view.Name || view.name || id));
+                    });
+                } catch (error) {
+                    console.warn('JFToStashSync: cannot list Jellyfin libraries for Trending.', error);
+                }
+                if (selected && !select.find('option').filter(function () { return this.value === selected; }).length) {
+                    select.append($('<option>').val(selected).text(jfSettingsMsg('Previously selected library (') + selected + ')'));
+                }
+                select.val(selected || '');
+            }
+
+            async function populatePopularityLibraries(selected) {
+                var select = $('#StashDbPopularityLibraryId');
+                select.empty().append($('<option>').val('').text(jfSettingsMsg('All accessible video libraries')));
+                try {
+                    var uid = ApiClient.getCurrentUserId();
+                    var response = await ApiClient.fetch({
+                        url: ApiClient.getUrl('Users/' + encodeURIComponent(uid) + '/Views'), type: 'GET'
+                    });
+                    if (!response.ok) throw new Error('HTTP ' + response.status);
+                    var payload = await response.json();
+                    var views = payload.Items || payload.items || [];
+                    views.forEach(function (view) {
+                        var kind = String(view.CollectionType || view.collectionType || '').toLowerCase();
+                        if (['movies', 'homevideos', 'mixed', 'tvshows'].indexOf(kind) < 0) return;
+                        var id = view.Id || view.id;
+                        if (id) select.append($('<option>').val(id).text(view.Name || view.name || id));
+                    });
+                } catch (error) {
+                    console.warn('JFToStashSync: cannot list Jellyfin libraries for Popularity.', error);
+                }
+                if (selected && !select.find('option').filter(function () { return this.value === selected; }).length) {
+                    select.append($('<option>').val(selected).text(jfSettingsMsg('Previously selected library (') + selected + ')'));
+                }
+                select.val(selected || '');
+            }
+
             $('#ConfigurationPage').on('pageshow', function () {
+                translateSettingsPage();
+                setSettingsReady(false, jfSettingsMsg('Loading saved settings...'));
                 Dashboard.showLoadingMsg();
                 $('#StashConnectionTestStatus').text('');
                 $('#JellyfinUrlSyncStatus').text('');
                 $('#JellyfinPerformerUrlSyncStatus').text('');
 
                 ApiClient.getPluginConfiguration(pluginConfig.pluginUniqueId).then(function (config) {
+                    if (!config) throw new Error('Empty server configuration');
                     fillPageFromConfig(config);
+                    setSettingsReady(true);
+                    populateTrendingLibraries(config.StashDbTrendingLibraryId || '');
+                    populatePopularityLibraries(config.StashDbPopularityLibraryId || '');
                     Dashboard.hideLoadingMsg();
-                }).catch(function () {
+                }).catch(function (error) {
+                    console.error('JFToStashSync: failed to load plugin settings.', error);
+                    setSettingsReady(false, jfSettingsMsg('Could not load saved settings from Jellyfin. Do not save an empty form; reload this page and try again.'));
                     Dashboard.hideLoadingMsg();
                 });
 
@@ -388,11 +964,11 @@
                     .on('click.stashConnectionTest', function () {
                         var endpoint = ($('#StashEndpoint').val() || '').trim();
                         if (!endpoint) {
-                            $('#StashConnectionTestStatus').text('Enter the Stash address first.');
+                            $('#StashConnectionTestStatus').text(jfSettingsMsg('Enter the Stash address first.'));
                             return;
                         }
 
-                        $('#StashConnectionTestStatus').text('Testing connection to Stash...');
+                        $('#StashConnectionTestStatus').text(jfSettingsMsg('Testing connection to Stash...'));
                         Dashboard.showLoadingMsg();
 
                         saveCurrentPageConfig()
@@ -407,7 +983,7 @@
                                     if (!response.ok) {
                                         throw new Error(
                                             getResultValue(body, 'message', 'Message') ||
-                                            'Could not connect to Stash.'
+                                            jfSettingsMsg('Could not connect to Stash.')
                                         );
                                     }
 
@@ -415,7 +991,7 @@
                                 });
                             })
                             .then(function (result) {
-                                var message = getResultValue(result, 'message', 'Message') || 'Connection to Stash succeeded.';
+                                var message = getResultValue(result, 'message', 'Message') || jfSettingsMsg('Connection to Stash succeeded.');
 
                                 $('#StashConnectionTestStatus').text('✓ ' + message);
                                 Dashboard.hideLoadingMsg();
@@ -434,11 +1010,11 @@
                     .on('click.jellyfinUrlSync', function () {
                         var itemId = ($('#ManualJellyfinItemId').val() || '').trim();
                         if (!itemId) {
-                            $('#JellyfinUrlSyncStatus').text('Enter a Jellyfin video ID first.');
+                            $('#JellyfinUrlSyncStatus').text(jfSettingsMsg('Enter a Jellyfin video ID first.'));
                             return;
                         }
 
-                        $('#JellyfinUrlSyncStatus').text('Sending Jellyfin link to Stash...');
+                        $('#JellyfinUrlSyncStatus').text(jfSettingsMsg('Sending Jellyfin link to Stash...'));
                         Dashboard.showLoadingMsg();
 
                         saveCurrentPageConfig()
@@ -474,23 +1050,174 @@
                             })
                             .catch(function (error) {
                                 $('#JellyfinUrlSyncStatus').text(
-                                    'Error: ' + (error && error.message ? error.message : error)
+                                    jfSettingsMsg('Error: ') + (error && error.message ? error.message : error)
                                 );
                                 Dashboard.hideLoadingMsg();
                             });
                     });
 
 
+                $('#FetchBabepediaActorNow')
+                    .off('click.babepediaActor').on('click.babepediaActor', function () {
+                        var id = ($('#ManualBabepediaPersonId').val() || '').trim();
+                        if (!id) { $('#BabepediaActorStatus').text(jfSettingsMsg('Enter a Jellyfin Person ID.')); return; }
+                        $('#BabepediaActorStatus').text(jfSettingsMsg('Checking saved data, Stash links and Babepedia...'));
+                        Dashboard.showLoadingMsg();
+                        saveCurrentPageConfig().then(function () {
+                            return ApiClient.fetch({
+                                url: ApiClient.getUrl('JFToStashSync/BabepediaActorFetch') + '?personId=' + encodeURIComponent(id),
+                                type: 'POST'
+                            });
+                        }).then(function (response) {
+                            return response.json().then(function (result) {
+                                if (!response.ok) throw new Error(result.message || result.Message || 'Babepedia request failed');
+                                return result;
+                            });
+                        }).then(function (r) {
+                            var score = getResultValue(r, 'rating', 'Rating');
+                            var rank = getResultValue(r, 'rank', 'Rank');
+                            var favorites = getResultValue(r, 'favorites', 'Favorites');
+                            var name = getResultValue(r, 'personName', 'PersonName') || id;
+                            var url = getResultValue(r, 'url', 'Url') || '';
+                            $('#BabepediaActorStatus').text(
+                                name + '\nRating: ' + (score == null ? 'N/A' : score + '/10') +
+                                ' | Rank: ' + (rank == null ? 'N/A' : '#' + rank) +
+                                ' | Favorites: ' + (favorites == null ? 'N/A' : favorites) +
+                                '\nSource: ' + url + '\n' + (getResultValue(r,'fromCache','FromCache') ? 'Cached result' : 'Fresh result') +
+                                '\nRefresh the Jellyfin page to see the statistics below actor portraits.'
+                            );
+                        }).catch(function (e) { $('#BabepediaActorStatus').text(jfSettingsMsg('Error: ') + (e.message || e)); })
+                          .finally(function () { Dashboard.hideLoadingMsg(); });
+                    });
+
+                $('#FetchPornhubActorStats').off('click.pornhubStats').on('click.pornhubStats', function () {
+                    var id = ($('#ManualPornhubPersonId').val() || '').trim();
+                    if (!id) { $('#PornhubActorStatsStatus').text(jfSettingsMsg('Enter the Jellyfin Person ID in the Pornhub actor field below.')); return; }
+                    var force = $('#ForcePornhubStatsRefresh').prop('checked') === true;
+                    $('#PornhubActorStatsStatus').text(jfSettingsMsg('Checking cached statistics and Pornhub profile...'));
+                    Dashboard.showLoadingMsg();
+                    saveCurrentPageConfig().then(function () {
+                        return pornhubApiJson(pornhubApi('PornhubActorStatsFetch', id, '&force=' + force), 'POST');
+                    }).then(function (r) {
+                        if (($('#ManualPornhubPersonId').val() || '').replace(/-/g,'').toLowerCase() !== id.replace(/-/g,'').toLowerCase())
+                            throw new Error('Actor ID changed during the request.');
+                        function v(k) { var val = getResultValue(r, k[0].toLowerCase()+k.slice(1), k); return val == null ? 'N/A' : val; }
+                        $('#PornhubActorStatsStatus').text(
+                            v('PersonName') + '\nAward winner: ' + (v('AwardWinner') === true ? 'Yes' : 'No') +
+                            ' | Verified: ' + (v('Verified') === true ? 'Yes' : 'No') +
+                            '\nModel rank: ' + v('ModelRank') + ' | Weekly: ' + v('WeeklyRank') +
+                            ' | Monthly: ' + v('MonthlyRank') +
+                            '\nLast month: ' + v('LastMonthRank') + ' | Yearly: ' + v('YearlyRank') +
+                            '\nVideo views: ' + v('VideoViews') + ' | Subscribers: ' + v('Subscribers') +
+                            '\n' + (v('FromCache') === true ? 'Cached' : 'Fresh') + ' | ' + v('ProfileUrl') +
+                            '\nRefresh Jellyfin to see the lines below portraits.'
+                        );
+                        $('#ForcePornhubStatsRefresh').prop('checked', false);
+                    }).catch(function (e) { $('#PornhubActorStatsStatus').text(jfSettingsMsg('Error: ') + (e.message || e)); })
+                      .finally(function () { Dashboard.hideLoadingMsg(); });
+                });
+
+                // Manual Pornhub artwork: preview first, then save selected image types.
+                // Images are served via authenticated Jellyfin endpoints; no CDN URLs are exposed to the client.
+                var pornhubPreviewId = null;
+                var pornhubPreviewUrls = [];
+                function clearPornhubPreview() {
+                    pornhubPreviewId = null;
+                    pornhubPreviewUrls.forEach(function (url) { URL.revokeObjectURL(url); });
+                    pornhubPreviewUrls = [];
+                    $('#PornhubArtworkPreview').hide();
+                    $('#PornhubLogoPreview, #PornhubBannerPreview').hide().removeAttr('src');
+                    $('#PornhubSaveLogo, #PornhubSaveBanner').prop('checked', false).prop('disabled', true);
+                }
+                function pornhubApi(operation, id, extra) {
+                    return ApiClient.getUrl('JFToStashSync/' + operation) +
+                        '?personId=' + encodeURIComponent(id) + (extra || '');
+                }
+                function pornhubApiJson(url, type) {
+                    return ApiClient.fetch({url: url, type: type}).then(function (response) {
+                        return response.json().then(function (body) {
+                            if (!response.ok) throw new Error(body.message || body.Message || jfSettingsMsg('Pornhub request failed (HTTP ') + response.status + ')');
+                            return body;
+                        });
+                    });
+                }
+                function displayPornhubPreview(id, kind, available) {
+                    var image = $('#Pornhub' + (kind === 'logo' ? 'Logo' : 'Banner') + 'Preview');
+                    var checkbox = $('#PornhubSave' + (kind === 'logo' ? 'Logo' : 'Banner'));
+                    checkbox.prop('checked', !!available).prop('disabled', !available);
+                    if (!available) return Promise.resolve();
+                    return ApiClient.fetch({url: pornhubApi('PornhubArtworkPreview', id, '&kind=' + kind), type:'GET'})
+                        .then(function (response) {
+                            if (!response.ok) throw new Error(jfSettingsMsg('Image preview could not be loaded (HTTP ') + response.status + ')');
+                            return response.blob();
+                        }).then(function (blob) {
+                            if (pornhubPreviewId !== id) return;
+                            var url = URL.createObjectURL(blob);
+                            pornhubPreviewUrls.push(url);
+                            image.attr('src', url).show();
+                        });
+                }
+                $('#ManualPornhubPersonId').on('input.pornhubArtwork', function () {
+                    clearPornhubPreview();
+                    $('#PornhubArtworkStatus').text('');
+                });
+                $('#InspectPornhubArtwork').off('click.pornhubArtwork').on('click.pornhubArtwork', function () {
+                    var id = ($('#ManualPornhubPersonId').val() || '').trim();
+                    if (!id) { $('#PornhubArtworkStatus').text(jfSettingsMsg('Enter a Jellyfin Person ID.')); return; }
+                    clearPornhubPreview();
+                    $('#PornhubArtworkStatus').text(jfSettingsMsg('Reading Stash links and checking Pornhub profile...'));
+                    Dashboard.showLoadingMsg();
+                    pornhubApiJson(pornhubApi('PornhubArtworkInspect', id), 'POST')
+                        .then(function (r) {
+                            // Discard a result if the Person ID was changed during the request.
+                            var currentId = ($('#ManualPornhubPersonId').val() || '').trim();
+                            if (currentId.replace(/-/g, '').toLowerCase() !== id.replace(/-/g, '').toLowerCase())
+                                throw new Error(jfSettingsMsg('Actor ID changed. Preview the new actor first.'));
+                            var personId = getResultValue(r, 'personId', 'PersonId') || id;
+                            pornhubPreviewId = personId;
+                            var source = getResultValue(r, 'linkSource', 'LinkSource') || '';
+                            var name = getResultValue(r, 'personName', 'PersonName') || personId;
+                            var profile = getResultValue(r, 'profileUrl', 'ProfileUrl') || '';
+                            var hasLogo = getResultValue(r, 'hasLogo', 'HasLogo') === true;
+                            var hasBanner = getResultValue(r, 'hasBanner', 'HasBanner') === true;
+                            $('#PornhubArtworkProfile').text(name + '\nSource: ' + source + '\nProfile: ' + profile);
+                            $('#PornhubArtworkPreview').show();
+                            return Promise.all([
+                                displayPornhubPreview(personId, 'logo', hasLogo),
+                                displayPornhubPreview(personId, 'banner', hasBanner)
+                            ]);
+                        }).then(function () {
+                            $('#PornhubArtworkStatus').text(jfSettingsMsg('Review both images below, then save the selected image types. No images have been changed yet.'));
+                        }).catch(function (e) {
+                            clearPornhubPreview();
+                            $('#PornhubArtworkStatus').text(jfSettingsMsg('Error: ') + (e.message || e));
+                        }).finally(function () { Dashboard.hideLoadingMsg(); });
+                });
+                $('#ApplyPornhubArtwork').off('click.pornhubArtwork').on('click.pornhubArtwork', function () {
+                    var id = pornhubPreviewId;
+                    if (!id) { $('#PornhubArtworkStatus').text(jfSettingsMsg('Find and preview the actor first.')); return; }
+                    var logo = $('#PornhubSaveLogo').prop('checked');
+                    var banner = $('#PornhubSaveBanner').prop('checked');
+                    if (!logo && !banner) { $('#PornhubArtworkStatus').text(jfSettingsMsg('Select Logo and/or Banner.')); return; }
+                    $('#PornhubArtworkStatus').text(jfSettingsMsg('Saving selected images to Jellyfin...'));
+                    Dashboard.showLoadingMsg();
+                    pornhubApiJson(pornhubApi('PornhubArtworkApply', id, '&logo=' + logo + '&banner=' + banner), 'POST')
+                        .then(function (result) {
+                            $('#PornhubArtworkStatus').text(getResultValue(result, 'message', 'Message') || jfSettingsMsg('Images saved.'));
+                        }).catch(function (e) { $('#PornhubArtworkStatus').text(jfSettingsMsg('Error: ') + (e.message || e)); })
+                          .finally(function () { Dashboard.hideLoadingMsg(); });
+                });
+
                 $('#SyncJellyfinPerformerUrlNow')
                     .off('click.jellyfinPerformerUrlSync')
                     .on('click.jellyfinPerformerUrlSync', function () {
                         var personId = ($('#ManualJellyfinPersonId').val() || '').trim();
                         if (!personId) {
-                            $('#JellyfinPerformerUrlSyncStatus').text('Enter a Jellyfin actor ID first.');
+                            $('#JellyfinPerformerUrlSyncStatus').text(jfSettingsMsg('Enter a Jellyfin actor ID first.'));
                             return;
                         }
 
-                        $('#JellyfinPerformerUrlSyncStatus').text('Sending actor Jellyfin link to Stash...');
+                        $('#JellyfinPerformerUrlSyncStatus').text(jfSettingsMsg('Sending actor Jellyfin link to Stash...'));
                         Dashboard.showLoadingMsg();
 
                         saveCurrentPageConfig()
@@ -505,7 +1232,7 @@
                                     if (!response.ok) {
                                         throw new Error(
                                             getResultValue(body, 'message', 'Message') ||
-                                            'The actor Jellyfin link could not be synchronized.'
+                                            jfSettingsMsg('The actor Jellyfin link could not be synchronized.')
                                         );
                                     }
 
@@ -513,7 +1240,7 @@
                                 });
                             })
                             .then(function (result) {
-                                var message = getResultValue(result, 'message', 'Message') || 'Actor Jellyfin link synchronized.';
+                                var message = getResultValue(result, 'message', 'Message') || jfSettingsMsg('Actor Jellyfin link synchronized.');
                                 var url = getResultValue(result, 'url', 'Url') || '';
                                 var performerId = getResultValue(result, 'performerId', 'PerformerId') || '';
 
@@ -526,7 +1253,7 @@
                             })
                             .catch(function (error) {
                                 $('#JellyfinPerformerUrlSyncStatus').text(
-                                    'Error: ' + (error && error.message ? error.message : error)
+                                    jfSettingsMsg('Error: ') + (error && error.message ? error.message : error)
                                 );
                                 Dashboard.hideLoadingMsg();
                             });
@@ -535,6 +1262,10 @@
             });
 
             $('#ConfigurationPage').on('submit', function () {
+                if (!settingsLoaded) {
+                    setSettingsReady(false, jfSettingsMsg('Saved settings are not loaded; nothing was changed. Reload this page to retry.'));
+                    return false;
+                }
                 Dashboard.showLoadingMsg();
 
                 saveCurrentPageConfig()
@@ -548,6 +1279,6 @@
                 return false;
             });
         </script>
-    </div>
+</div>
 </body>
 </html>

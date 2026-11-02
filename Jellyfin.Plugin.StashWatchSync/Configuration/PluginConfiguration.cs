@@ -102,6 +102,136 @@ public bool SyncPerformerFavorites { get; set; } = false;
     public bool SyncJellyfinPerformerUrls { get; set; } = false;
 
     /// <summary>
+    /// Show a StashDB Trending carousel on the Jellyfin Web home page.
+    /// Fetches Trending directly from StashDB using the credentials already stored in Stash.
+    /// </summary>
+    public bool EnableStashDbTrendingRow { get; set; } = false;
+
+    /// <summary>Optional Jellyfin library ID for the Trending row; empty means accessible libraries.</summary>
+    public string StashDbTrendingLibraryId { get; set; } = string.Empty;
+
+    /// <summary>Number of StashDB Trending pages (40 entries each) initially examined.</summary>
+    public int StashDbTrendingPages { get; set; } = 5;
+
+
+    /// <summary>Show cached Babepedia ratings below actor portraits in Jellyfin Web.</summary>
+    public bool EnableBabepediaActorStats { get; set; } = false;
+
+    /// <summary>How long successfully retrieved Babepedia statistics remain fresh: 1, 7 or 30 days.</summary>
+    public int BabepediaCacheDays { get; set; } = 7;
+
+    /// <summary>Show cached Pornhub statistics in separate lines below Person portraits.</summary>
+    public bool EnablePornhubActorStats { get; set; } = false;
+
+    /// <summary>Show a featured Pornhub-style actor banner above custom home-page rows in Jellyfin Web.</summary>
+    public bool EnablePornhubFeaturedBanner { get; set; } = false;
+
+    // Self-contained media slideshow inspired by Media Bar Enhanced.
+    // Independent of the featured actor banner; disabled until selected.
+    public bool EnableFeaturedMediaBanner { get; set; } = false;
+    public bool FeaturedMediaIncludeWatched { get; set; } = false;
+    public bool FeaturedMediaRequireLogo { get; set; } = false;
+    public bool FeaturedMediaShowOverview { get; set; } = true;
+    public bool FeaturedMediaShowRatings { get; set; } = true;
+    public bool FeaturedMediaShowProgress { get; set; } = true;
+    public bool FeaturedMediaPauseOnHover { get; set; } = false;
+    public string FeaturedMediaSortBy { get; set; } = "Random";
+    public int FeaturedMediaSlideSeconds { get; set; } = 15;
+    public int FeaturedMediaMaxItems { get; set; } = 30;
+    public string FeaturedMediaLibraryIds { get; set; } = string.Empty;
+
+    /// <summary>Featured banner rotation: Random or Ranked (best-ranked people first).</summary>
+    // The actor slideshow has independent controls from the media slideshow.
+    public int FeaturedBannerSlideSeconds { get; set; } = 15;
+    public int FeaturedBannerMaxItems { get; set; } = 30;
+    public bool FeaturedBannerShowProgress { get; set; } = true;
+    public bool FeaturedBannerPauseOnHover { get; set; } = false;
+
+    public string FeaturedBannerOrder { get; set; } = "Random";
+
+    /// <summary>Ranking provider for banner sorting: Pornhub or Babepedia.</summary>
+    public string FeaturedBannerRankingSource { get; set; } = "Pornhub";
+
+    public bool FeaturedBannerShowPornhubModelRank { get; set; } = true;
+    public bool FeaturedBannerShowPornhubWeeklyRank { get; set; } = false;
+    public bool FeaturedBannerShowPornhubMonthlyRank { get; set; } = false;
+    public bool FeaturedBannerShowPornhubLastMonthRank { get; set; } = false;
+    public bool FeaturedBannerShowPornhubYearlyRank { get; set; } = false;
+    public bool FeaturedBannerShowPornhubVideoViews { get; set; } = true;
+    public bool FeaturedBannerShowPornhubSubscribers { get; set; } = true;
+    public bool FeaturedBannerShowBabepediaRating { get; set; } = false;
+    public bool FeaturedBannerShowBabepediaRank { get; set; } = false;
+    public bool FeaturedBannerShowBabepediaFavorites { get; set; } = false;
+    public bool FeaturedBannerShowBabepediaVotes { get; set; } = false;
+
+    /// <summary>How many days manual Pornhub statistics remain fresh: 1, 7, 30.</summary>
+    public int PornhubStatsCacheDays { get; set; } = 7;
+
+    /// <summary>Enable scheduled collection of Pornhub ratings; independent of the Web display option.</summary>
+    public bool PornhubScheduledFetchStats { get; set; } = false;
+
+    /// <summary>Enable scheduled downloads of actor Logo/Banner from Pornhub profiles.</summary>
+    public bool PornhubScheduledFetchArtwork { get; set; } = false;
+
+    /// <summary>Artwork policy: MissingOnly (do not replace) or AfterCacheExpiry (refresh stale images).</summary>
+    public string PornhubArtworkUpdateMode { get; set; } = "MissingOnly";
+
+    /// <summary>Number of days before downloaded images may be replaced in AfterCacheExpiry mode.</summary>
+    public int PornhubArtworkCacheDays { get; set; } = 7;
+
+    /// <summary>Show precomputed Babepedia Top 100 lists as performer rows.</summary>
+    public bool EnableBabepediaTopRows { get; set; } = false;
+
+    /// <summary>Freshness of each Babepedia Top 100 list: 1, 7, or 30 days.</summary>
+    public int BabepediaTopCacheDays { get; set; } = 1;
+
+    /// <summary>
+    /// When a Babepedia Top 100 profile has no matching external URL in Stash,
+    /// try an exact, unambiguous name match against Jellyfin Person records.
+    /// Never edits Stash links or Jellyfin provider IDs.
+    /// </summary>
+    public bool BabepediaTopFallbackToJellyfinName { get; set; } = false;
+
+    public bool BabepediaTopPornstars { get; set; } = true;
+    public bool BabepediaTopMilf { get; set; } = false;
+    public bool BabepediaTopAsian { get; set; } = false;
+    public bool BabepediaTopLatina { get; set; } = false;
+    public bool BabepediaTopSlavic { get; set; } = false;
+    public bool BabepediaTopEbony { get; set; } = false;
+    public bool BabepediaTopCaucasian { get; set; } = false;
+    public bool BabepediaTopOnlyfans { get; set; } = false;
+
+    /// <summary>Show a separate StashDB Popularity row on the Jellyfin Web home page.</summary>
+    public bool EnableStashDbPopularityRow { get; set; } = false;
+
+    /// <summary>Optional Jellyfin library ID for Popularity; empty means all accessible libraries.</summary>
+    public string StashDbPopularityLibraryId { get; set; } = string.Empty;
+
+    /// <summary>Number of StashDB Popularity pages (40 entries per page).</summary>
+    public int StashDbPopularityPages { get; set; } = 5;
+
+
+    /// <summary>Color the poster border in StashDB Trending/Popularity by current user's favorite / played state.</summary>
+    public bool HighlightRankedVideoStates { get; set; } = false;
+
+    /// <summary>Show the performer's birth-country flag on StashDB/Babepedia ranking portraits.</summary>
+    public bool ShowRankedPerformerBirthFlags { get; set; } = false;
+
+    /// <summary>Show StashDB performer Popularity rows on the Jellyfin home page.</summary>
+    public bool EnableStashDbPerformerPopularityRows { get; set; } = false;
+
+    /// <summary>Number of ranking pages (40 performers/page) for each selected gender.</summary>
+    public int StashDbPerformerPopularityPages { get; set; } = 5;
+
+    /// <summary>Each enabled category is displayed as a separate horizontal row.</summary>
+    public bool StashDbPerformerGenderFemale { get; set; } = true;
+    public bool StashDbPerformerGenderIntersex { get; set; } = false;
+    public bool StashDbPerformerGenderMale { get; set; } = false;
+    public bool StashDbPerformerGenderNonBinary { get; set; } = false;
+    public bool StashDbPerformerGenderTransgenderFemale { get; set; } = false;
+    public bool StashDbPerformerGenderTransgenderMale { get; set; } = false;
+
+    /// <summary>
     /// Show an O+ button in the Jellyfin Web video player. Pressing it increments
     /// the matching Stash scene o-counter using Stash sceneAddO.
     /// Requires the File Transformation plugin to inject the client script.
@@ -123,6 +253,13 @@ public bool SyncPerformerFavorites { get; set; } = false;
     public bool ShowActorGenderIcons { get; set; } = false;
 
     /// <summary>
+    /// Highlight only current-user favorite actor portraits with a subtle pale-red inset outline in Jellyfin Web,
+    /// both on native Person cards and on StashDB Performer Popularity rows.
+    /// Does not affect non-Person posters or require the Popularity rows to be enabled.
+    /// </summary>
+    public bool HighlightActorPortraits { get; set; } = false;
+
+    /// <summary>
     /// In Jellyfin Web person detail pages, convert plain http/https URLs in the person's
     /// overview text into clickable external links. Requires the File Transformation web integration.
     /// </summary>
@@ -134,6 +271,15 @@ public bool SyncPerformerFavorites { get; set; } = false;
     /// Uses the bundled user-supplied SVG logos and does not require Stash.
     /// </summary>
     public bool ShowPersonSocialIcons { get; set; } = false;
+
+    /// <summary>Replace the Person information section with optional Info / Co-stars tabs.</summary>
+    public bool EnablePersonCoStarsTabs { get; set; } = false;
+    public bool CoStarsGenderFemale { get; set; } = true;
+    public bool CoStarsGenderMale { get; set; } = true;
+    public bool CoStarsGenderIntersex { get; set; } = true;
+    public bool CoStarsGenderNonBinary { get; set; } = true;
+    public bool CoStarsGenderTransgenderFemale { get; set; } = true;
+    public bool CoStarsGenderTransgenderMale { get; set; } = true;
 
     /// <summary>
     /// Base Jellyfin URL that Stash users can open, for example

@@ -1,5 +1,6 @@
 (function () {
     'use strict';
+    const T = (text) => window.__jfToStashI18n?.t(text) ?? String(text ?? '');
 
     if (window.__jfToStashOCounterLoaded) {
         return;
@@ -540,6 +541,7 @@
         link.setAttribute('data-jf-to-stash-overview-link', 'true');
         link.style.textDecoration = 'underline';
         link.style.cursor = 'pointer';
+        link.style.pointerEvents = 'auto';
         return link;
     }
 
@@ -666,6 +668,7 @@
                 var type = String(item && (item.Type || item.type) || '').toLowerCase();
                 personDetailsCache[itemId] = {
                     isPerson: type === 'person',
+                    name: String(item && (item.Name !== undefined ? item.Name : item.name) || ''),
                     overview: String(item && (item.Overview !== undefined ? item.Overview : item.overview) || '')
                 };
             })
@@ -677,6 +680,35 @@
                 delete personDetailsPending[itemId];
                 scheduleEnsureButton();
             });
+    }
+
+    // Compare the page's native Jellyfin item identifier with the URL instead of
+    // comparing the contents of the Overview. The UI may render a different
+    // representation (HTML paragraphs, line breaks, translated descriptions,
+    // NBSPs) from the raw Person.Overview returned by the API. A strict text
+    // equality/prefix check silently disabled linkification on real profiles.
+    function overviewBelongsToActiveItem(overview, itemId, details) {
+        var page = overview && overview.closest('#itemDetailPage, .itemDetailPage');
+        if (!page) return false;
+
+        // On a SPA route change the previous person's DOM can briefly remain.
+        // The built-in favorite control carries the identity of the rendered item.
+        var nativeButton = page.querySelector('.mainDetailButtons .btnUserRating[data-id], .mainDetailButtons .btnUserRating[data-itemid]');
+        var renderedId = nativeButton && (nativeButton.getAttribute('data-id') || nativeButton.getAttribute('data-itemid') || '');
+        if (renderedId && renderedId.replace(/-/g, '').toLowerCase() !== itemId.toLowerCase()) {
+            return false;
+        }
+
+        // Some themes omit the favorite control. If a native name is available,
+        // use it as an additional guard while waiting for the new Person to render.
+        if (!renderedId && details && details.name) {
+            var heading = page.querySelector('h1.itemName bdi, h1.itemName');
+            if (heading && normalizeOverviewText(heading.textContent).toLowerCase() !==
+                normalizeOverviewText(details.name).toLowerCase()) {
+                return false;
+            }
+        }
+        return true;
     }
 
     function ensurePersonOverviewLinks() {
@@ -696,7 +728,7 @@
         }
 
         var details = personDetailsCache[itemId];
-        if (!details || !details.isPerson || !details.overview || !/https?:\/\//i.test(details.overview)) {
+        if (!details || !details.isPerson) {
             return;
         }
 
@@ -705,11 +737,10 @@
             return;
         }
 
-        // Verify that the visible block is the current Person's overview before editing it.
-        // The Web UI may show a shortened form, so either side may be a prefix of the other.
-        var expected = normalizeOverviewText(details.overview);
-        var actual = normalizeOverviewText(overview.textContent || '');
-        if (expected && actual && expected.indexOf(actual) !== 0 && actual.indexOf(expected) !== 0) {
+        // Identity is verified by the API Person type, route ID and rendered
+        // Jellyfin item ID. Do not require raw and displayed Overview text to
+        // match: Jellyfin may format or rewrite the biography independently.
+        if (!overviewBelongsToActiveItem(overview, itemId, details)) {
             return;
         }
 
@@ -968,8 +999,8 @@
         button.type = 'button';
         button.setAttribute('is', 'emby-button');
         button.className = 'button-flat btnStashSceneLink detailButton emby-button';
-        button.title = 'Refresh metadata and find Stash scene';
-        button.setAttribute('aria-label', 'Refresh metadata and find Stash scene');
+        button.title = T('Refresh metadata and find Stash scene');
+        button.setAttribute('aria-label', T('Refresh metadata and find Stash scene'));
         button.setAttribute('data-item-id', itemId);
 
         var content = document.createElement('div');
@@ -1009,7 +1040,7 @@
         button.style.opacity = processing ? '0.55' : '1';
         button.title = processing
             ? 'Refreshing metadata and finding Stash scene…'
-            : 'Refresh metadata and find Stash scene';
+            : T('Refresh metadata and find Stash scene');
         button.setAttribute('aria-label', button.title);
     }
 
@@ -1045,7 +1076,7 @@
 
                     var currentButton = document.getElementById(DETAIL_LINK_BUTTON_ID);
                     if (currentButton && currentButton.getAttribute('data-item-id') === itemId) {
-                        currentButton.title = sceneId ? ('Linked to Stash scene ' + sceneId) : 'Linked to Stash';
+                        currentButton.title = sceneId ? (T('Linked to Stash scene ') + sceneId) : T('Linked to Stash');
                         currentButton.setAttribute('aria-label', currentButton.title);
                         currentButton.style.opacity = '1';
                         window.setTimeout(function () {
@@ -1372,14 +1403,14 @@
 
             var newState = !isFavorite;
             button.setAttribute('data-is-favorite', newState ? 'true' : 'false');
-            button.title = newState ? 'Remove from favorites' : 'Add to favorites';
+            button.title = newState ? T('Remove from favorites') : T('Add to favorites');
             button.setAttribute('aria-label', button.title);
             button.replaceChildren(createFavoriteGlyph(newState));
             person.UserData = person.UserData || {};
             person.UserData.IsFavorite = newState;
         } catch (error) {
             console.error('[JFToStashSync] Could not change performer favorite state.', error);
-            button.title = 'Favorite update failed: ' + (error && error.message ? error.message : error);
+            button.title = T('Favorite update failed: ') + (error && error.message ? error.message : error);
         } finally {
             button.disabled = false;
             button.style.opacity = '1';
@@ -1402,7 +1433,7 @@
         imageLink.href = detailsUrl;
         imageLink.target = '_blank';
         imageLink.rel = 'noopener noreferrer';
-        imageLink.title = person.Name ? ('Open ' + person.Name + ' in a new tab') : 'Open actor in a new tab';
+        imageLink.title = person.Name ? (T('Open ') + person.Name + T(' in a new tab')) : T('Open actor in a new tab');
         imageLink.setAttribute('aria-label', imageLink.title);
         imageLink.style.display = 'block';
         imageLink.style.width = '56px';
@@ -1448,8 +1479,8 @@
         nameLink.href = detailsUrl;
         nameLink.target = '_blank';
         nameLink.rel = 'noopener noreferrer';
-        nameLink.textContent = person.Name || 'Unknown actor';
-        nameLink.title = person.Name ? ('Open ' + person.Name + ' in a new tab') : 'Open actor in a new tab';
+        nameLink.textContent = person.Name || T('Unknown actor');
+        nameLink.title = person.Name ? (T('Open ') + person.Name + T(' in a new tab')) : T('Open actor in a new tab');
         nameLink.style.display = 'block';
         nameLink.style.flex = '0 1 auto';
         nameLink.style.minWidth = '0';
@@ -1488,7 +1519,7 @@
         favButton.setAttribute('is', 'paper-icon-button-light');
         favButton.className = 'paper-icon-button-light';
         favButton.setAttribute('data-is-favorite', isFavorite ? 'true' : 'false');
-        favButton.title = isFavorite ? 'Remove from favorites' : 'Add to favorites';
+        favButton.title = isFavorite ? T('Remove from favorites') : T('Add to favorites');
         favButton.setAttribute('aria-label', favButton.title);
         favButton.style.width = '44px';
         favButton.style.height = '44px';
@@ -1554,7 +1585,7 @@
         panel.id = ACTOR_DIALOG_ID;
         panel.setAttribute('role', 'dialog');
         panel.setAttribute('aria-modal', 'false');
-        panel.setAttribute('aria-label', 'Actors');
+        panel.setAttribute('aria-label', T('Actors'));
         panel.style.position = 'fixed';
         panel.style.zIndex = '999999';
         panel.style.width = 'min(430px, calc(100vw - 20px))';
@@ -1582,7 +1613,7 @@
 
         if (!Array.isArray(persons) || !persons.length) {
             var empty = document.createElement('div');
-            empty.textContent = 'No actors found for this video.';
+            empty.textContent = T('No actors found for this video.');
             empty.style.padding = '18px';
             empty.style.opacity = '.75';
             list.appendChild(empty);
@@ -1732,10 +1763,10 @@
             showActorDialog(actors, button);
         } catch (error) {
             console.error('[JFToStashSync] Could not load actors for the current video.', error);
-            button.title = 'Actors: ' + (error && error.message ? error.message : 'load failed');
+            button.title = T('Actors: ') + (error && error.message ? error.message : T('load failed'));
             window.setTimeout(function () {
                 if (button.isConnected) {
-                    button.title = 'Actors';
+                    button.title = T('Actors');
                 }
             }, 1800);
         } finally {
@@ -1756,8 +1787,8 @@
         button.type = 'button';
         button.setAttribute('is', 'paper-icon-button-light');
         button.className = 'btnJFToStashActors autoSize paper-icon-button-light';
-        button.title = 'Actors';
-        button.setAttribute('aria-label', 'Actors');
+        button.title = T('Actors');
+        button.setAttribute('aria-label', T('Actors'));
         button.setAttribute('aria-haspopup', 'dialog');
         button.setAttribute('aria-expanded', 'false');
         button.appendChild(createUserGlyph('xlargePaperIconButton jfToStashActorsGlyph'));
@@ -1823,8 +1854,8 @@
         button.type = 'button';
         button.setAttribute('is', 'paper-icon-button-light');
         button.className = 'btnStashOCounter autoSize paper-icon-button-light';
-        button.title = 'Stash: +1 to O counter';
-        button.setAttribute('aria-label', 'Stash: +1 to O counter');
+        button.title = T('Stash: +1 to O counter');
+        button.setAttribute('aria-label', T('Stash: +1 to O counter'));
 
         var glyph = document.createElement('span');
         glyph.className = 'xlargePaperIconButton jfToStashOCounterGlyph';
@@ -1863,8 +1894,8 @@
 
         window.setTimeout(function () {
             if (button.isConnected) {
-                button.title = 'Stash: +1 to O counter';
-                button.setAttribute('aria-label', 'Stash: +1 to O counter');
+                button.title = T('Stash: +1 to O counter');
+                button.setAttribute('aria-label', T('Stash: +1 to O counter'));
                 button.style.opacity = '1';
             }
         }, 1400);
@@ -1881,8 +1912,8 @@
 
         button.disabled = true;
         button.style.opacity = '0.55';
-        button.title = 'Stash: updating O counter…';
-        button.setAttribute('aria-label', 'Stash: updating O counter');
+        button.title = T('Stash: updating O counter…');
+        button.setAttribute('aria-label', T('Stash: updating O counter'));
 
         try {
             var itemId = (button.getAttribute('data-item-id') || '').replace(/-/g, '') || await resolveCurrentItemId();
@@ -1970,7 +2001,8 @@
         ensureActorButton();
         ensureDetailLinkButton();
         ensureActorGenderIcons();
-        ensurePersonOverviewLinks();
+        // Person overview links are handled in person-detail-enhancements.js,
+        // alongside the verified Person route and malformed-paragraph handling.
         ensurePersonSocialIcons();
     }
 
@@ -1982,33 +2014,101 @@
         window.requestAnimationFrame(ensureAllButtons);
     }
 
-    async function loadConfig() {
-        var api = getApiClient();
-        if (!api || typeof api.fetch !== 'function' || typeof api.getUrl !== 'function') {
-            window.setTimeout(loadConfig, 1000);
-            return;
-        }
+    // v1.2.0.51: the Home warmup can start before Jellyfin finishes signing in.
+    // A failed first request must NOT permanently disable the player controls,
+    // actor gender icons, or Person social links for the rest of the SPA session.
+    var configRequest = null;
+    var configRetryTimer = null;
+    var configUserId = '';
+    var configLoadedAt = 0;
 
-        try {
-            var config = await apiJson('JFToStashSync/PlayerOCounterConfig');
-            configEnabled = !!(config && (config.enabled === true || config.Enabled === true));
-            actorListEnabled = !!(config && (config.actorListEnabled === true || config.ActorListEnabled === true));
-            actorGenderIconsEnabled = !!(config && (config.actorGenderIconsEnabled === true || config.ActorGenderIconsEnabled === true));
-            personOverviewLinksEnabled = !!(config && (config.personOverviewLinksEnabled === true || config.PersonOverviewLinksEnabled === true));
-            personSocialIconsEnabled = !!(config && (config.personSocialIconsEnabled === true || config.PersonSocialIconsEnabled === true));
-        } catch (error) {
-            configEnabled = false;
-            actorListEnabled = false;
-            actorGenderIconsEnabled = false;
-            personOverviewLinksEnabled = false;
-            personSocialIconsEnabled = false;
-            console.warn('[JFToStashSync] Could not load Jellyfin Web integration configuration.', error);
-        }
+    function retryConfigAfter(delay) {
+        if (configRetryTimer !== null) return;
+        configRetryTimer = window.setTimeout(function () {
+            configRetryTimer = null;
+            loadConfig();
+        }, delay);
+    }
 
+    function clearConfigRetry() {
+        if (configRetryTimer !== null) {
+            window.clearTimeout(configRetryTimer);
+            configRetryTimer = null;
+        }
+    }
+
+    function resetWebIntegrationFlags() {
+        configEnabled = false;
+        actorListEnabled = false;
+        actorGenderIconsEnabled = false;
+        personOverviewLinksEnabled = false;
+        personSocialIconsEnabled = false;
+        restoreAllActorGenderIcons();
+        restorePersonSocialIcons();
         scheduleEnsureButton();
     }
 
+    async function loadConfig() {
+        // Join a concurrent request instead of spawning duplicate calls from
+        // sign-in, SPA navigation, and retry events.
+        if (configRequest) return configRequest;
+
+        var api = getApiClient();
+        if (!api || typeof api.fetch !== 'function' || typeof api.getUrl !== 'function') {
+            retryConfigAfter(1000);
+            return;
+        }
+        var requestedUser = getCurrentUserId();
+        if (window.__jfHomeWarmup && !requestedUser) {
+            // getConfig() intentionally rejects when signed out. Retry after
+            // authentication rather than permanently turning all options off.
+            retryConfigAfter(1000);
+            return;
+        }
+
+        configRequest = (async function () {
+            try {
+                var config = await (window.__jfHomeWarmup?.getConfig?.() || apiJson('JFToStashSync/PlayerOCounterConfig'));
+                if (requestedUser && getCurrentUserId() !== requestedUser) {
+                    // Never apply cached options from the previous Jellyfin user.
+                    retryConfigAfter(200);
+                    return;
+                }
+                if (!config || typeof config !== 'object') throw new Error('Empty Jellyfin Web integration configuration');
+                configEnabled = (config.enabled === true || config.Enabled === true);
+                actorListEnabled = (config.actorListEnabled === true || config.ActorListEnabled === true);
+                actorGenderIconsEnabled = (config.actorGenderIconsEnabled === true || config.ActorGenderIconsEnabled === true);
+                personOverviewLinksEnabled = (config.personOverviewLinksEnabled === true || config.PersonOverviewLinksEnabled === true);
+                personSocialIconsEnabled = (config.personSocialIconsEnabled === true || config.PersonSocialIconsEnabled === true);
+                configUserId = requestedUser;
+                configLoadedAt = Date.now();
+                clearConfigRetry();
+            } catch (error) {
+                // On transient failures retain the last valid settings for the
+                // SAME user; otherwise discard stale settings across accounts.
+                if (!configLoadedAt || configUserId !== requestedUser) {
+                    resetWebIntegrationFlags();
+                }
+                console.warn('[JFToStashSync] Jellyfin Web settings unavailable; retrying after sign-in.', error);
+                retryConfigAfter(2000);
+            } finally {
+                scheduleEnsureButton();
+            }
+        })();
+
+        try { await configRequest; }
+        finally { configRequest = null; }
+    }
+
     function start() {
+        // The warmup emits this event as soon as ApiClient has the signed-in
+        // user. It can arrive after the first config attempt, especially when
+        // the browser was reloaded on a Jellyfin settings/details page.
+        document.addEventListener('jf-to-stash-user-ready', function () {
+            if (getCurrentUserId() !== configUserId) resetWebIntegrationFlags();
+            clearConfigRetry();
+            loadConfig();
+        });
         loadConfig();
         observer = new MutationObserver(scheduleEnsureButton);
         observer.observe(document.documentElement, {
@@ -2023,7 +2123,7 @@
             // changing visibility/data-id. Clear the status cache so the active item is
             // re-checked immediately instead of waiting for a full browser reload.
             restoreAllActorGenderIcons();
-            restorePersonOverviewLinks();
+            // Person details module owns the overview anchors and their cleanup.
             restorePersonSocialIcons();
             closeActorDialog();
             detailStatusCache = Object.create(null);
@@ -2031,6 +2131,15 @@
             actorRolePending = Object.create(null);
             personDetailsCache = Object.create(null);
             personDetailsPending = Object.create(null);
+            // Web options might have been changed on another Dashboard page or
+            // the signed-in user might have changed without a full reload.
+            if (getCurrentUserId() !== configUserId) {
+                resetWebIntegrationFlags();
+                clearConfigRetry();
+                loadConfig();
+            } else if (!configLoadedAt || Date.now() - configLoadedAt > 10000) {
+                loadConfig();
+            }
             scheduleEnsureButton();
             window.setTimeout(scheduleEnsureButton, 100);
             window.setTimeout(scheduleEnsureButton, 500);

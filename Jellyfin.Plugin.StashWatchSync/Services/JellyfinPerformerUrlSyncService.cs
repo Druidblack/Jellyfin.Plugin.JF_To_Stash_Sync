@@ -137,33 +137,30 @@ public sealed class JellyfinPerformerUrlSyncService
             return JellyfinPerformerUrlSyncBatchResult.SkippedResult(urlError);
         }
 
-        // Ask Jellyfin only for Person records instead of loading every library item.
-        var people = _libraryManager.GetItemList(
-                new InternalItemsQuery
-                {
-                    IncludeItemTypes = new[] { BaseItemKind.Person },
-                    Recursive = true,
-                })
-            .OfType<Person>()
-            .Where(HasStashProviderId)
-            .ToArray();
-
-        var result = new JellyfinPerformerUrlSyncBatchResult
+        // Retain only GUIDs during the long-running Stash synchronization.
+        // A provider-ID existence filter avoids hydrating every Person.
+        var personIds = _libraryManager.GetItemIds(new InternalItemsQuery
         {
-            Total = people.Length,
-        };
+            IncludeItemTypes = new[] { BaseItemKind.Person },
+            HasAnyProviderId = new System.Collections.Generic.Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["Stash"] = string.Empty
+            },
+            Recursive = true,
+            EnableTotalRecordCount = false,
+        });
 
-        if (people.Length == 0)
-        {
-            progress.Report(100);
-            result.Message = "No Jellyfin people with a Stash provider ID were found.";
-            return result;
-        }
-
-        for (var i = 0; i < people.Length; i++)
+        var result = new JellyfinPerformerUrlSyncBatchResult();
+        for (var i = 0; i < personIds.Count; i++)
         {
             ct.ThrowIfCancellationRequested();
-            var person = people[i];
+            if (_libraryManager.GetItemById(personIds[i]) is not Person person ||
+                !HasStashProviderId(person))
+            {
+                progress.Report((i + 1) * 100d / personIds.Count);
+                continue;
+            }
+            result.Total++;
 
             try
             {
@@ -203,7 +200,14 @@ public sealed class JellyfinPerformerUrlSyncService
                     person.Name);
             }
 
-            progress.Report((i + 1) * 100d / people.Length);
+            progress.Report((i + 1) * 100d / personIds.Count);
+        }
+
+        if (result.Total == 0)
+        {
+            progress.Report(100);
+            result.Message = "No Jellyfin people with a Stash provider ID were found.";
+            return result;
         }
 
         result.Message =
