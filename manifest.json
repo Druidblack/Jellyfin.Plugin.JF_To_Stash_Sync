@@ -2,12 +2,20 @@
     {
         "guid": "61db1999-72b9-4f58-ac15-25aedcabd583",
         "name": "JF To Stash Sync",
-        "overview": "Sync Jellyfin watch activity to Stash: increments play count for each play session and reports the real watched time.",
-        "description": "Sends Jellyfin playback activity to Stash via GraphQL: play count increments and watched time per session, even for unfinished plays.",
+        "overview": "Synchronize Jellyfin activity with Stash. We are also adding visual interface improvements: ratings, top actors and videos, and more...",
+        "description": "Synchronize Jellyfin activity with Stash. We are also adding visual interface improvements: ratings, top actors and videos, and more...",
         "owner": "Druidblack",
         "category": "General",
         "imageUrl": "https://raw.githubusercontent.com/Druidblack/Jellyfin.Plugin.JF_To_Stash_Sync/main/images/logo.jpg",
         "versions": [
+            {
+                "version": "1.2.0.3",
+                "changelog": "Adding new features. See the repository description.",
+                "targetAbi": "12.0",
+                "sourceUrl": "https://github.com/Druidblack/Jellyfin.Plugin.JF_To_Stash_Sync/releases/download/1.2.0.3/Release-1.2.0.3.zip",
+                "checksum": "7bfca32afb0fea9c63c95196b38e8241",
+                "timestamp": "2026-11-01T10:00:00+03:00"
+            },
             {
                 "version": "1.2.0.2",
                 "changelog": "Adding new features. See the repository description.",
